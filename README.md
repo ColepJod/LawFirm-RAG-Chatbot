@@ -20,10 +20,11 @@ No cloud API key is required.
 
 ## Current status
 
-**Steps 1-2 are complete.** The repository currently contains the project
+**Steps 1-3 are complete.** The repository currently contains the project
 skeleton, typed configuration, pinned dependency declarations, configuration
-tests, and a multi-format ingestion pipeline (PDF, Markdown, plain text, DOCX)
-with hashing, metadata, and idempotent manifests.
+tests, a multi-format ingestion pipeline (PDF, Markdown, plain text, DOCX)
+with hashing, metadata, and idempotent manifests, and a configurable chunking
+layer with recursive and structure-aware strategies.
 
 Retrieval, the LangGraph control loop, generation, evaluation, and the API are
 implemented in later steps.

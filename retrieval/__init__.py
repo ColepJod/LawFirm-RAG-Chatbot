@@ -2,6 +2,8 @@
 
 from retrieval.bm25 import BM25Index
 from retrieval.embeddings import create_embeddings, resolve_device
+from retrieval.fusion import HybridRRFRetriever, rrf_fuse
+from retrieval.hybrid import build_hybrid_retriever
 from retrieval.indexing import (
     IndexResult,
     chunk_id,
@@ -15,8 +17,10 @@ from retrieval.vectorstores import VectorStoreHandle, create_vector_store
 
 __all__ = [
     "BM25Index",
+    "HybridRRFRetriever",
     "IndexResult",
     "VectorStoreHandle",
+    "build_hybrid_retriever",
     "build_retrievers",
     "chunk_id",
     "create_bm25_retriever",
@@ -28,4 +32,5 @@ __all__ = [
     "index_chunks",
     "load_indexed_chunks",
     "resolve_device",
+    "rrf_fuse",
 ]

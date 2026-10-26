@@ -2036,7 +2036,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.7.0"
+version = "1.6.13"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -2050,9 +2050,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/64/cb/77d1dabe57d0dc0f96f65cba321366c341627295d1c09eefa58549e34391/langchain_core-1.7.0.tar.gz", hash = "sha256:c34e53358b103cd73f43c63f5f46f9b5c6c3467efdffcdf134892b89020494e4", size = 1020046, upload-time = "2026-10-22T17:47:21.554Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/40/76/0b8e5383a9c6a05bde284790d661487bb586cf101f43e8d4dac1fb3da1ee/langchain_core-1.6.13.tar.gz", hash = "sha256:756d8fd971cd7e3a5a19cf5453a81159351bd40cbfe62cbfe7e2ee3941008772", size = 1018477, upload-time = "2026-10-21T20:43:32.248Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/d8/ed130e91cee0525cb47d185b98a5a6ffd6a8b660a100fbee43d887e745d6/langchain_core-1.7.0-py3-none-any.whl", hash = "sha256:e82b24d7ac51fc74874baa29d6b3c0b8234880d4f3d897f8ff57fb80dfd9b07d", size = 574676, upload-time = "2026-10-22T17:47:19.749Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/2f/c15b026e7b4aa093bc237c909bf909e8a59143b1315efee43c296fad58ce/langchain_core-1.6.13-py3-none-any.whl", hash = "sha256:8605de6f84a49902ef6be03d6fe2a126e7dfc35184315989689f341181f0a8fb", size = 574683, upload-time = "2026-10-21T20:43:30.951Z" },
 ]
 
 [[package]]
@@ -2288,7 +2288,8 @@ generation = [
 ]
 ingest = [
     { name = "docling" },
-    { name = "pdfmux" },
+    { name = "langchain-core" },
+    { name = "pdfmux", extra = ["langchain"] },
     { name = "unstructured", extra = ["docx", "pdf"] },
 ]
 observability = [
@@ -2319,6 +2320,7 @@ requires-dist = [
     { name = "langchain", marker = "extra == 'orchestration'", specifier = "==1.4.7" },
     { name = "langchain-chroma", marker = "extra == 'retrieval'", specifier = "==1.1.0" },
     { name = "langchain-community", marker = "extra == 'orchestration'", specifier = "==0.4.2" },
+    { name = "langchain-core", marker = "extra == 'ingest'", specifier = "==1.6.13" },
     { name = "langchain-huggingface", marker = "extra == 'retrieval'", specifier = "==1.2.3" },
     { name = "langchain-ollama", marker = "extra == 'generation'", specifier = "==1.1.0" },
     { name = "langchain-text-splitters", marker = "extra == 'orchestration'", specifier = "==1.1.3" },
@@ -2326,7 +2328,7 @@ requires-dist = [
     { name = "langgraph", marker = "extra == 'orchestration'", specifier = "==1.2.16" },
     { name = "llamella", marker = "extra == 'evaluation'", specifier = "==0.1.0" },
     { name = "ollama", marker = "extra == 'generation'", specifier = "==0.6.3" },
-    { name = "pdfmux", marker = "extra == 'ingest'", specifier = "==1.8.7" },
+    { name = "pdfmux", extras = ["langchain"], marker = "extra == 'ingest'", specifier = "==1.8.7" },
     { name = "pydantic", specifier = "==2.14.1" },
     { name = "pydantic-settings", specifier = "==2.16.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
@@ -3666,6 +3668,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a0/b3/f5bd25598c95c073536232660b25852f329f327eeae4450f468c86bace99/pdfmux-1.8.7.tar.gz", hash = "sha256:5dcc6cd7367a81aee2d95200d9c138003220e87167fddc4528410846d7525cd7", size = 1775174, upload-time = "2026-07-27T17:39:25.212Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/04/1d/0116f5b78e325a404f34ac7fcda25644fab8bafee86cb7b0db88b995afce/pdfmux-1.8.7-py3-none-any.whl", hash = "sha256:8c9c6a8985c5e1c2a20868141d5258616a1538a234a591f6c39c88c9a4b44f5b", size = 212108, upload-time = "2026-07-27T17:39:22.86Z" },
+]
+
+[package.optional-dependencies]
+langchain = [
+    { name = "langchain-core" },
 ]
 
 [[package]]

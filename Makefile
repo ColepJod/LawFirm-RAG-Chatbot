@@ -15,6 +15,9 @@ config:
 config-dirs:
 	uv run python -m config --check-dirs --show-cache-env
 
+ingest:
+	uv run python -m ingestion --path data
+
 test:
 	uv run pytest -q
 

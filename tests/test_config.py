@@ -19,8 +19,8 @@ def test_standard_profile_defaults() -> None:
     assert settings.resource_profile == "standard"
     assert settings.embedding_model == "BAAI/bge-m3"
     assert settings.reranker_model == "BAAI/bge-reranker-v2-m3"
-    assert settings.llm_model == "qwen3:8b"
-    assert settings.eval_judge_model == "qwen3:8b"
+    assert settings.llm_model == "llama-3.3-70b-versatile"
+    assert settings.eval_judge_model == "llama-3.3-70b-versatile"
     assert settings.chunk_size == 512
     assert settings.chunk_overlap == 96
     assert 0.10 <= settings.chunk_overlap / settings.chunk_size <= 0.25
@@ -37,8 +37,8 @@ def test_cpu_profile_defaults() -> None:
     assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
     assert settings.embedding_max_seq_length == 512
     assert settings.reranker_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    assert settings.llm_model == "qwen3:4b"
-    assert settings.eval_judge_model == "qwen3:4b"
+    assert settings.llm_model == "llama-3.3-70b-versatile"
+    assert settings.eval_judge_model == "llama-3.3-70b-versatile"
 
 
 def test_explicit_model_overrides_profile() -> None:
@@ -75,7 +75,7 @@ def test_empty_environment_values_are_ignored(monkeypatch: pytest.MonkeyPatch) -
 
     settings = make_settings(resource_profile="cpu")
 
-    assert settings.llm_model == "qwen3:4b"
+    assert settings.llm_model == "llama-3.3-70b-versatile"
     assert settings.llm_api_key is None
 
 
@@ -199,7 +199,7 @@ def test_env_example_is_loadable() -> None:
 
     assert settings.resource_profile == "cpu"
     assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
-    assert settings.llm_model == "qwen3:4b"
+    assert settings.llm_model == "llama-3.3-70b-versatile"
     assert settings.llm_api_key is None
 
 

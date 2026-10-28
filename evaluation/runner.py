@@ -70,13 +70,9 @@ def default_pipeline_factory(settings: Settings | None = None) -> Pipeline:
 
     reranker = create_reranker(settings)
 
-    from langchain_ollama import ChatOllama
+    from generation import create_llm
 
-    llm = ChatOllama(
-        model=settings.llm_model,
-        base_url=settings.llm_base_url,
-        temperature=settings.llm_temperature,
-    )
+    llm = create_llm(settings)
 
     deps = GraphDependencies(settings=settings, llm=llm, retriever=retriever, reranker=reranker)
     graph = build_graph(deps)

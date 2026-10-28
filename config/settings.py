@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     reranker_max_length: int = Field(default=512, ge=64, le=8192)
     reranker_device: Literal["auto", "cpu", "cuda", "mps"] = "auto"
 
-    llm_provider: Literal["ollama", "vllm"] = "ollama"
+    llm_provider: Literal["ollama", "vllm", "groq"] = "groq"
     llm_model: str = ""
     llm_base_url: str = "http://127.0.0.1:11434"
     llm_api_key: SecretStr | None = None
@@ -203,7 +203,10 @@ class Settings(BaseSettings):
         if self.reranker_batch_size == 0:
             self.reranker_batch_size = profile.reranker_batch_size
         if not self.llm_model.strip():
-            self.llm_model = profile.llm_model
+            if self.llm_provider == "groq":
+                self.llm_model = "llama-3.3-70b-versatile"
+            else:
+                self.llm_model = profile.llm_model
         if not self.eval_judge_model.strip():
             self.eval_judge_model = self.llm_model
 

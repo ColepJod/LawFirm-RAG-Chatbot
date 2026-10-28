@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from api.state import AppState
 from config import apply_model_cache_environment, get_settings
+from generation import create_llm
 from graph import GraphDependencies, build_graph
 from observability import InputGuardrails, OutputGuardrails, TraceLogger
 from reranking import create_reranker
@@ -32,7 +33,7 @@ def build_app_state(settings=None) -> AppState:
 
     dependencies = GraphDependencies(
         settings=settings,
-        llm=_create_llm(settings),
+        llm=create_llm(settings),
         retriever=retriever,
         reranker=reranker,
         trace_logger=trace_logger,
@@ -49,16 +50,6 @@ def build_app_state(settings=None) -> AppState:
         input_guardrails=InputGuardrails(settings),
         output_guardrails=OutputGuardrails(settings),
         trace_path=settings.trace_dir / "traces.jsonl",
-    )
-
-
-def _create_llm(settings):
-    from langchain_ollama import ChatOllama
-
-    return ChatOllama(
-        model=settings.llm_model,
-        base_url=settings.llm_base_url,
-        temperature=settings.llm_temperature,
     )
 
 

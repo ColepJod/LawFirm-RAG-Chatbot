@@ -12,7 +12,7 @@ The target stack is free, open-source, and locally runnable:
 - **Embeddings:** local Hugging Face models (no API key)
 - **Sparse retrieval:** BM25 via `rank_bm25`
 - **Reranking:** local cross-encoder
-- **LLM:** Ollama (or vLLM for staging)
+- **LLM:** Groq by default, with Ollama and vLLM still supported
 - **Evaluation:** llamella + ragnarok-ai, with optional local RAGAS
 - **Observability:** structured JSON traces, optional self-hosted Langfuse
 

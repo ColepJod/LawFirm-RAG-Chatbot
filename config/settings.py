@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     checkpoint_db_path: Path = Path("var/checkpoints.sqlite")
     max_query_rewrites: int = Field(default=2, ge=0, le=5)
     max_grounding_retries: int = Field(default=1, ge=0, le=5)
-    max_graph_steps: int = Field(default=12, ge=6, le=50)
+    max_graph_steps: int = Field(default=25, ge=6, le=50)
 
     golden_set_path: Path = Path("evaluation/golden_set.jsonl")
     eval_output_dir: Path = Path("var/eval")

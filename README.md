@@ -20,14 +20,16 @@ No cloud API key is required.
 
 ## Current status
 
-**Steps 1-6 are complete.** The repository currently contains the project
+**Steps 1-7 are complete.** The repository currently contains the project
 skeleton, typed configuration, pinned dependency declarations, configuration
 tests, a multi-format ingestion pipeline, a configurable chunking layer, local
 embedding/indexing with Chroma or Qdrant plus a BM25 index, incremental
-indexing, Reciprocal Rank Fusion, and local cross-encoder reranking.
+indexing, Reciprocal Rank Fusion, local cross-encoder reranking, and a
+LangGraph RAG control loop with routing, condensation, retrieval, grading,
+rewriting, reranking, generation, and grounding checks.
 
-The LangGraph control loop, generation, evaluation, and the API are implemented
-in later steps.
+Multi-turn memory, evaluation, observability, the API, and end-to-end tests are
+implemented in later steps.
 
 ## Requirements
 

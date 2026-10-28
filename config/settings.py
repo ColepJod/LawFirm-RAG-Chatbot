@@ -204,7 +204,7 @@ class Settings(BaseSettings):
             self.reranker_batch_size = profile.reranker_batch_size
         if not self.llm_model.strip():
             if self.llm_provider == "groq":
-                self.llm_model = "llama-3.3-70b-versatile"
+                self.llm_model = "qwen/qwen3.8-27b"
             else:
                 self.llm_model = profile.llm_model
         if not self.eval_judge_model.strip():

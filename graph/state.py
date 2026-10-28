@@ -29,6 +29,8 @@ class RAGState(TypedDict, total=False):
     route_decision: str
     rewrite_count: int
     grounding_retry_count: int
+    node_latencies: dict[str, float]
+    retrieved_source_ids: list[str]
 
 
 @dataclass
@@ -46,4 +48,5 @@ class GraphDependencies:
     generator: Callable[[str, list[Document]], tuple[str, list[str]]] | None = None
     grounding_checker: Callable[[str, list[Document]], bool] | None = None
     direct_answerer: Callable[[str], str] | None = None
+    trace_logger: Any = None
     node_latencies: dict[str, float] = field(default_factory=dict)

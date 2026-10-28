@@ -152,6 +152,7 @@ def make_route_node(dependencies: GraphDependencies):
             "citations": [],
             "generation": "",
             "grounding_verdict": "",
+            "node_latencies": {},
         }
 
     return route
@@ -289,3 +290,39 @@ def make_direct_answer_node(dependencies: GraphDependencies):
         }
 
     return direct_answer
+
+
+def make_log_trace_node(dependencies: GraphDependencies):
+    from observability.tracing import RunTrace, TraceLogger
+
+    logger = dependencies.trace_logger
+    if logger is None:
+        from config import get_settings
+
+        logger = TraceLogger(dependencies.settings or get_settings())
+        dependencies.trace_logger = logger
+
+    def log_trace(state: RAGState) -> dict[str, Any]:
+        reranked = list(state.get("reranked_chunks") or [])
+        retrieved = list(state.get("retrieved_chunks", []))
+        documents = reranked or retrieved
+        trace = RunTrace(
+            query=str(state.get("original_query", "")),
+            standalone_query=str(state.get("standalone_query", "")),
+            retrieved_chunk_ids=[
+                str((document.metadata or {}).get("chunk_id") or _source_id(document))
+                for document in retrieved
+            ],
+            reranker_scores=[
+                float((document.metadata or {}).get("reranker_score", 0.0)) for document in reranked
+            ],
+            route_decision=str(state.get("route_decision", "")),
+            grounding_verdict=str(state.get("grounding_verdict", "")),
+            final_context_length=sum(len(document.page_content) for document in documents),
+            response=str(state.get("generation", "")),
+            node_latencies_ms=dict(state.get("node_latencies", {})),
+        )
+        logger.write(trace)
+        return {}
+
+    return log_trace

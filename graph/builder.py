@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from typing import Any
+
 from langgraph.graph import END, START, StateGraph
 
 from graph.checkpointing import create_checkpointer
@@ -11,12 +14,27 @@ from graph.nodes import (
     make_generate_node,
     make_grade_node,
     make_grounding_node,
+    make_log_trace_node,
     make_rerank_node,
     make_retrieve_node,
     make_rewrite_node,
     make_route_node,
 )
 from graph.state import GraphDependencies, RAGState
+
+
+def _timed(name: str, node):
+    def wrapper(state: RAGState) -> dict[str, Any]:
+        started = time.perf_counter()
+        result = node(state)
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        merged = dict(result or {})
+        latencies = dict((state or {}).get("node_latencies", {}))
+        latencies[name] = elapsed_ms
+        merged["node_latencies"] = latencies
+        return merged
+
+    return wrapper
 
 
 def build_graph(dependencies: GraphDependencies, checkpointer=None):
@@ -27,15 +45,18 @@ def build_graph(dependencies: GraphDependencies, checkpointer=None):
 
     graph = StateGraph(RAGState)
 
-    graph.add_node("route", make_route_node(dependencies))
-    graph.add_node("condense_question", make_condense_node(dependencies))
-    graph.add_node("retrieve", make_retrieve_node(dependencies))
-    graph.add_node("grade_documents", make_grade_node(dependencies))
-    graph.add_node("rerank", make_rerank_node(dependencies))
-    graph.add_node("rewrite_query", make_rewrite_node(dependencies))
-    graph.add_node("generate", make_generate_node(dependencies))
-    graph.add_node("check_grounding", make_grounding_node(dependencies))
-    graph.add_node("direct_answer", make_direct_answer_node(dependencies))
+    graph.add_node("route", _timed("route", make_route_node(dependencies)))
+    graph.add_node(
+        "condense_question", _timed("condense_question", make_condense_node(dependencies))
+    )
+    graph.add_node("retrieve", _timed("retrieve", make_retrieve_node(dependencies)))
+    graph.add_node("grade_documents", _timed("grade_documents", make_grade_node(dependencies)))
+    graph.add_node("rerank", _timed("rerank", make_rerank_node(dependencies)))
+    graph.add_node("rewrite_query", _timed("rewrite_query", make_rewrite_node(dependencies)))
+    graph.add_node("generate", _timed("generate", make_generate_node(dependencies)))
+    graph.add_node("check_grounding", _timed("check_grounding", make_grounding_node(dependencies)))
+    graph.add_node("direct_answer", _timed("direct_answer", make_direct_answer_node(dependencies)))
+    graph.add_node("log_trace", _timed("log_trace", make_log_trace_node(dependencies)))
 
     graph.add_edge(START, "route")
 
@@ -84,17 +105,18 @@ def build_graph(dependencies: GraphDependencies, checkpointer=None):
     def grounding_branch(state: RAGState) -> str:
         if state.get("grounding_verdict") == "retry":
             return "generate"
-        return END
+        return "log_trace"
 
     graph.add_conditional_edges(
         "check_grounding",
         grounding_branch,
         {
             "generate": "generate",
-            END: END,
+            "log_trace": "log_trace",
         },
     )
 
-    graph.add_edge("direct_answer", END)
+    graph.add_edge("direct_answer", "log_trace")
+    graph.add_edge("log_trace", END)
 
     return graph.compile(checkpointer=checkpointer)

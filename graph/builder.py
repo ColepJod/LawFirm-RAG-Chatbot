@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
+from graph.checkpointing import create_checkpointer
 from graph.nodes import (
     make_condense_node,
     make_direct_answer_node,
@@ -19,8 +19,11 @@ from graph.nodes import (
 from graph.state import GraphDependencies, RAGState
 
 
-def build_graph(dependencies: GraphDependencies, checkpointer: BaseCheckpointSaver | None = None):
+def build_graph(dependencies: GraphDependencies, checkpointer=None):
     """Build and compile the RAG control loop."""
+
+    if checkpointer is None:
+        checkpointer = create_checkpointer(dependencies.settings)
 
     graph = StateGraph(RAGState)
 

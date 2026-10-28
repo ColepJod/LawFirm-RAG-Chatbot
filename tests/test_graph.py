@@ -143,6 +143,46 @@ def test_grounding_failure_retries_generation() -> None:
     assert result["grounding_verdict"] == "pass"
 
 
+def test_multi_turn_condensation_uses_checkpointed_history() -> None:
+    settings = make_settings()
+    doc = Document(
+        page_content="Consultations cost $300.",
+        metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
+    )
+    llm = FakeLLM(
+        [
+            "rag",
+            "yes",
+            "First answer",
+            "yes",
+            "rag",
+            "standalone follow-up",
+            "yes",
+            "Second answer",
+            "yes",
+        ]
+    )
+    retriever = FakeRetriever([[doc], [doc]])
+
+    deps = GraphDependencies(
+        settings=settings,
+        llm=llm,
+        retriever=retriever,
+        reranker=FakeReranker(),
+    )
+    graph = build_graph(deps)
+    config = {"configurable": {"thread_id": "multi-turn"}, "recursion_limit": 30}
+
+    first = graph.invoke(
+        {"messages": [HumanMessage("What is the consultation rate?")]}, config=config
+    )
+    second = graph.invoke({"messages": [HumanMessage("What about filings?")]}, config=config)
+
+    assert first["generation"] == "First answer"
+    assert second["generation"] == "Second answer"
+    assert retriever.queries == ["What is the consultation rate?", "standalone follow-up"]
+
+
 def test_out_of_scope_routes_away_from_retrieval() -> None:
     settings = make_settings()
     llm = FakeLLM(["out_of_scope", "I can only help with firm knowledge."])

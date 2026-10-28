@@ -125,6 +125,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = Field(default=180, ge=10, le=3600)
     llm_keep_alive: str = "5m"
 
+    checkpoint_backend: Literal["memory", "sqlite"] = "memory"
+    checkpoint_db_path: Path = Path("var/checkpoints.sqlite")
     max_query_rewrites: int = Field(default=2, ge=0, le=5)
     max_grounding_retries: int = Field(default=1, ge=0, le=5)
     max_graph_steps: int = Field(default=12, ge=6, le=50)

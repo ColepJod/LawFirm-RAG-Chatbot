@@ -21,6 +21,7 @@ class RAGState(TypedDict, total=False):
     original_query: str
     standalone_query: str
     retrieved_chunks: list[Document]
+    retrieved_source_ids: list[str]
     reranked_chunks: list[Document]
     generation: str
     grounding_verdict: str

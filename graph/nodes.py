@@ -65,6 +65,15 @@ def _format_citation(document: Document) -> str:
     return f"{source} | {section} | {page_text}"
 
 
+def _source_id(document: Document) -> str:
+    metadata = document.metadata or {}
+    for key in ("chunk_id", "id", "document_hash"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return f"content:{hash(document.page_content)}"
+
+
 def default_route(llm: Any, query: str) -> str:
     response = _invoke_text(llm, ROUTE_PROMPT.format(query=query)).lower()
     if "chit" in response:
@@ -138,6 +147,7 @@ def make_route_node(dependencies: GraphDependencies):
             "rewrite_count": 0,
             "grounding_retry_count": 0,
             "retrieved_chunks": [],
+            "retrieved_source_ids": [],
             "reranked_chunks": [],
             "citations": [],
             "generation": "",
@@ -166,7 +176,10 @@ def make_retrieve_node(dependencies: GraphDependencies):
             state.get("standalone_query") or state.get("original_query") or _current_query(state)
         )
         documents = _retrieve(dependencies.retriever, query)
-        return {"retrieved_chunks": list(documents)}
+        return {
+            "retrieved_chunks": list(documents),
+            "retrieved_source_ids": [_source_id(document) for document in documents],
+        }
 
     return retrieve
 
@@ -184,7 +197,10 @@ def make_grade_node(dependencies: GraphDependencies):
         relevant = [
             document for document, is_relevant in zip(documents, flags, strict=False) if is_relevant
         ]
-        return {"retrieved_chunks": relevant}
+        return {
+            "retrieved_chunks": relevant,
+            "retrieved_source_ids": [_source_id(document) for document in relevant],
+        }
 
     return grade
 
@@ -198,7 +214,11 @@ def make_rerank_node(dependencies: GraphDependencies):
         if not documents:
             return {"reranked_chunks": []}
         reranked = _rerank(dependencies.reranker, query, documents)
-        return {"reranked_chunks": list(reranked)}
+        return {
+            "reranked_chunks": list(reranked),
+            "retrieved_source_ids": [_source_id(document) for document in reranked]
+            or state.get("retrieved_source_ids", []),
+        }
 
     return rerank
 

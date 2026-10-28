@@ -20,16 +20,15 @@ No cloud API key is required.
 
 ## Current status
 
-**Steps 1-11 are complete.** The repository currently contains the project
-skeleton, typed configuration, pinned dependency declarations, configuration
-tests, a multi-format ingestion pipeline, a configurable chunking layer, local
-embedding/indexing with Chroma or Qdrant plus a BM25 index, incremental
-indexing, Reciprocal Rank Fusion, local cross-encoder reranking, a LangGraph
-RAG control loop, checkpointed multi-turn conversation memory, a local-first
-evaluation harness, structured tracing with input/output guardrails and health
-checks, and a FastAPI layer with `/ingest`, `/chat`, `/health`, and `/metrics`.
+**Steps 1-12 are complete.** The repository contains the full application:
+project skeleton, typed configuration, pinned and locked dependencies,
+multi-format ingestion, configurable chunking, local embedding/indexing with
+Chroma or Qdrant plus BM25, incremental indexing, Reciprocal Rank Fusion, local
+cross-encoder reranking, a LangGraph RAG control loop, checkpointed multi-turn
+memory, a local-first evaluation harness, observability and guardrails, a
+FastAPI layer, and unit plus end-to-end tests.
 
-End-to-end tests are implemented in Step 12.
+No Docker, Kubernetes, Terraform, CI/CD, or cloud deployment files are included.
 
 The API and end-to-end tests are implemented in later steps.
 

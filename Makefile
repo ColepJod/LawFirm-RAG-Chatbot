@@ -18,6 +18,9 @@ config-dirs:
 ingest:
 	uv run python -m ingestion --path data
 
+serve:
+	uv run python -m api
+
 test:
 	uv run pytest -q
 

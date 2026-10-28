@@ -27,7 +27,11 @@ def health_check(
         if vector_store is None:
             checks["vector_store"] = {"status": "not_configured"}
         else:
-            vector_store.similarity_search("health check", k=1)
+            store = getattr(vector_store, "store", None)
+            if store is not None and hasattr(store, "_collection"):
+                store._collection.count()
+            elif store is not None and hasattr(store, "client"):
+                store.client.get_collections()
             checks["vector_store"] = {"status": "ok", "backend": settings.vector_store_backend}
     except Exception as exc:
         healthy = False

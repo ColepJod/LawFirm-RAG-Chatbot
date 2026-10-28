@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from config import apply_model_cache_environment, get_settings
@@ -22,6 +23,25 @@ class PrefixedHuggingFaceEmbeddings(HuggingFaceEmbeddings):
         return super().embed_query(f"{self.query_prefix}{text}")
 
 
+class LazyEmbeddings(Embeddings):
+    """Delay model download and loading until the first embedding call."""
+
+    def __init__(self, factory) -> None:
+        self._factory = factory
+        self._inner: PrefixedHuggingFaceEmbeddings | None = None
+
+    def _load(self) -> PrefixedHuggingFaceEmbeddings:
+        if self._inner is None:
+            self._inner = self._factory()
+        return self._inner
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._load().embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._load().embed_query(text)
+
+
 def resolve_device(requested: str) -> str:
     """Resolve ``auto`` to a concrete local device."""
 
@@ -36,12 +56,7 @@ def resolve_device(requested: str) -> str:
     return "cpu"
 
 
-def create_embeddings(settings=None):
-    """Create the configured local embedding model."""
-
-    settings = settings or get_settings()
-    apply_model_cache_environment(settings)
-
+def _build_embeddings(settings):
     device = resolve_device(settings.embedding_device)
     model_kwargs: dict[str, object] = {"device": device}
     if "nomic" in settings.embedding_model.lower():
@@ -65,3 +80,15 @@ def create_embeddings(settings=None):
         query_prefix=settings.embedding_query_prefix,
         passage_prefix=settings.embedding_passage_prefix,
     )
+
+
+def create_embeddings(settings=None):
+    """Create a lazy local embedding model."""
+
+    settings = settings or get_settings()
+    apply_model_cache_environment(settings)
+
+    def factory():
+        return _build_embeddings(settings)
+
+    return LazyEmbeddings(factory)

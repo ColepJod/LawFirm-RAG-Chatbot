@@ -301,7 +301,12 @@ Implemented features:
 - grounding retry loop,
 - bounded retries,
 - citation generation,
-- refusal when context is insufficient.
+- refusal when context is insufficient,
+- LLM-based relevance/grounding judges now use structured JSON answers
+  (`{"relevant": bool}` / `{"grounded": bool}`) with tolerant yes/no fallback,
+- deterministic local reranker safety net: when the LLM judge flags no retrieved
+  document as relevant, the reranker-retained candidates are used before any
+  corrective query rewrite.
 
 ### Step 8 — Multi-turn memory
 
@@ -363,6 +368,14 @@ Implemented:
 - output citation/refusal guardrails,
 - health checks.
 
+Guardrail behavior (updated after live testing):
+
+- refusal answers are accepted as grounded outcomes,
+- citation validation accepts source-filename citations or numbered-citation
+  patterns (e.g., `[2, Section, p. 1]`),
+- refusal validation only applies when a RAG context was expected; direct
+  answers (chit-chat, out-of-scope) skip it.
+
 ### Step 11 — FastAPI layer
 
 Files:
@@ -381,13 +394,15 @@ Implemented endpoints:
 - `POST /chat`
 - `GET /health`
 - `GET /metrics`
+- `GET /` and `GET /ui` serve the browser chat UI (`api/static/index.html`).
 
 Features:
 
 - compiled graph reused across requests,
 - background ingestion,
 - input/output guardrails,
-- thread IDs for conversation memory.
+- thread IDs for conversation memory,
+- error responses with structured details are rendered safely by the UI.
 
 ### Step 12 — End-to-end tests
 
@@ -400,6 +415,13 @@ Implemented:
 - ingestion → chunking → indexing → retrieval pipeline test,
 - expected source in top results,
 - graph refusal without context.
+
+Latest verification status:
+
+- full test suite: **85 passed**,
+- `ruff check .` and `ruff format --check .` clean,
+- live API: `/chat` returns grounded answers with citations; chit-chat and
+  knowledge questions both return 200.
 
 ---
 

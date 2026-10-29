@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from api.factory import build_app_state
 from api.routes import router
@@ -28,6 +30,18 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+UI_PATH = Path(__file__).resolve().parent / "static" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+async def ui() -> FileResponse:
+    return FileResponse(UI_PATH)
+
+
+@app.get("/ui", include_in_schema=False)
+async def ui_alias() -> FileResponse:
+    return FileResponse(UI_PATH)
 
 
 def get_app_state() -> AppState:

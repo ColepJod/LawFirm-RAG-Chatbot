@@ -30,6 +30,21 @@ FastAPI layer, and unit plus end-to-end tests.
 
 No Docker, Kubernetes, Terraform, CI/CD, or cloud deployment files are included.
 
+## Web UI
+
+After starting the API:
+
+```powershell
+uv run python -m api
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/      Web chat UI
+http://127.0.0.1:8000/docs   Interactive API docs
+```
+
 The API and end-to-end tests are implemented in later steps.
 
 ## Requirements
@@ -178,3 +193,18 @@ yet, because a target that silently does nothing would be misleading.
 | 12 | Tests across the pipeline |
 
 No Docker, Kubernetes, Terraform, CI/CD, or cloud deployment files are included.
+
+## Web UI
+
+After starting the API:
+
+```powershell
+uv run python -m api
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/      Web chat UI
+http://127.0.0.1:8000/docs   Interactive API docs
+```

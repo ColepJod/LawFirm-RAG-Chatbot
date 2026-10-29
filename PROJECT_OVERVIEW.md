@@ -519,8 +519,7 @@ VectorStoreHandle.as_retriever(k=...)
 ### Evaluation pipeline
 
 ```python
-def pipeline(question: str) -> EvaluationOutput:
-    ...
+def pipeline(question: str) -> EvaluationOutput: ...
 ```
 
 Returns:

@@ -125,6 +125,16 @@ def test_chat_endpoint_rejects_empty_query(tmp_path: Path) -> None:
     assert response.status_code == 422
 
 
+def test_ui_endpoint_returns_html(tmp_path: Path) -> None:
+    state = make_state(tmp_path)
+    client = client_for(state)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Law Firm RAG Chatbot" in response.text
+
+
 def test_ingest_endpoint_requires_input(tmp_path: Path) -> None:
     state = make_state(tmp_path)
 

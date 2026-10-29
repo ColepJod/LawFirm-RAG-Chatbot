@@ -39,6 +39,11 @@ class FakeRetriever:
 
 
 class FakeReranker:
+    enabled: bool = True
+
+    def __init__(self, enabled: bool = True) -> None:
+        self.enabled = enabled
+
     def compress_documents(self, documents, query):
         return list(documents)
 
@@ -107,12 +112,47 @@ def test_correction_rewrites_and_retrieves_again() -> None:
         ["rag", "no", "better billing question", "yes", "Consultations cost $300.", "yes"]
     )
     retriever = FakeRetriever([[irrelevant], [relevant]])
-
-    result = invoke_graph(settings, llm, retriever)
+    # Disable the deterministic reranker so the LLM judge alone drives the rewrite.
+    deps = GraphDependencies(
+        settings=settings,
+        llm=llm,
+        retriever=retriever,
+        reranker=FakeReranker(enabled=False),
+    )
+    graph = build_graph(deps)
+    config = {"configurable": {"thread_id": "test-thread"}, "recursion_limit": 30}
+    result = graph.invoke({"messages": [HumanMessage("test query")]}, config=config)
 
     assert retriever.queries == ["test query", "better billing question"]
     assert result["generation"] == "Consultations cost $300."
     assert result["rewrite_count"] == 1
+
+
+def test_llm_irrelevant_falls_back_to_reranker_before_rewrite() -> None:
+    settings = make_settings()
+    doc = Document(
+        page_content="Consultations cost $300.",
+        metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
+    )
+    llm = FakeLLM(["rag", "no", "Consultations cost $300.", "yes"])
+    retriever = FakeRetriever([[doc]])
+    deps = GraphDependencies(
+        settings=settings,
+        llm=llm,
+        retriever=retriever,
+        reranker=FakeReranker(),
+    )
+    graph = build_graph(deps)
+    config = {"configurable": {"thread_id": "test-thread"}, "recursion_limit": 30}
+    result = graph.invoke({"messages": [HumanMessage("test query")]}, config=config)
+
+    # The LLM judge flagged the only retrieved document as irrelevant, but the
+    # deterministic reranker retained it, so the system should proceed to generate
+    # instead of rewriting the query.
+    assert retriever.queries == ["test query"]
+    assert result["retrieved_chunks"]
+    assert result["generation"] == "Consultations cost $300."
+    assert result["rewrite_count"] == 0
 
 
 def test_empty_retrieval_refuses_without_rewrite_when_disabled() -> None:

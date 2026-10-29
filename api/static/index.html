@@ -197,7 +197,18 @@
         });
         const data = await response.json();
         if (!response.ok) {
-          addMessage("Error: " + (data.detail || response.statusText), "assistant");
+          let message = response.statusText || "Request failed";
+          try {
+            const detail = data ? data.detail : null;
+            if (typeof detail === "string") {
+              message = detail;
+            } else if (detail) {
+              message = typeof detail === "object" ? JSON.stringify(detail) : String(detail);
+            }
+          } catch (err) {
+            message = response.statusText || "Request failed";
+          }
+          addMessage("Error: " + message, "assistant");
         } else {
           addMessage(data.answer || "No answer returned.", "assistant", data.citations || []);
         }

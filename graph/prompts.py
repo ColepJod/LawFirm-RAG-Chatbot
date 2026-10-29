@@ -30,15 +30,15 @@ Return only the rewritten question.
 Question: {query}
 Rewritten question:"""
 
-GRADE_PROMPT = """Is the following document relevant to the question?
-Answer only "yes" or "no".
+GRADE_PROMPT = """You are a relevance judge for a law-firm knowledge assistant.
+
+Return a JSON object with a single boolean field named "relevant".
+Use true when the document helps answer the question, false otherwise.
 
 Question: {query}
 
 Document:
-{document}
-
-Answer:"""
+{document}"""
 
 GENERATE_PROMPT = """You are a law-firm RAG assistant. Answer only from the provided context.
 If the context is insufficient, say that you do not have enough information.
@@ -51,16 +51,16 @@ Context:
 
 Answer:"""
 
-GROUNDING_PROMPT = """Determine whether the answer is fully supported by the context.
-Answer only "yes" or "no".
+GROUNDING_PROMPT = """You are a grounding judge for a law-firm knowledge assistant.
+
+Return a JSON object with a single boolean field named "grounded".
+Use true when the answer is fully supported by the context, false otherwise.
 
 Context:
 {context}
 
 Answer:
-{answer}
-
-Is the answer fully supported?"""
+{answer}"""
 
 DIRECT_ANSWER_PROMPT = """You are a helpful assistant for a law firm. Answer briefly.
 If the user asks about firm documents, rates, locations, specialties, or billing,

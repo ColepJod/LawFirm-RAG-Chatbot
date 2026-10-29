@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from langchain_core.documents import Document
@@ -23,6 +24,41 @@ def _invoke_text(llm: Any, prompt: str) -> str:
     response = llm.invoke([HumanMessage(content=prompt)])
     content = getattr(response, "content", response)
     return str(content).strip()
+
+
+def _invoke_json_bool(llm: Any, prompt: str, key: str) -> bool:
+    """Invoke the LLM with a JSON boolean answer, falling back to a yes/no answer.
+
+    Some instruction-tuned chat models ignore "answer only yes or no" style
+    prompts and return unreliable free-form text. Structured JSON answers are
+    substantially more deterministic, with a tolerant fallback for plain
+    "yes"/"no" responses (and test doubles).
+    """
+
+    response = llm.invoke([HumanMessage(content=prompt)])
+    text = str(getattr(response, "content", response) or "").strip()
+    normalized = text.strip().strip("`").strip()
+    if normalized.lower().startswith("json"):
+        normalized = normalized[4:].strip().lstrip("`\n ").rstrip("`\n ")
+    parsed: Any = None
+    try:
+        parsed = json.loads(normalized)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        parsed = None
+
+    if isinstance(parsed, bool):
+        return parsed
+    if isinstance(parsed, dict) and key in parsed:
+        value = parsed[key]
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"yes", "true", "y", "1"}:
+                return True
+            if lowered in {"no", "false", "n", "0"}:
+                return False
+    return text.lower().startswith("yes")
 
 
 def _current_query(state: RAGState) -> str:
@@ -97,11 +133,12 @@ def default_rewrite(llm: Any, query: str, history: list[BaseMessage]) -> str:
 def default_grade(llm: Any, query: str, documents: list[Document]) -> list[bool]:
     results: list[bool] = []
     for document in documents:
-        response = _invoke_text(
+        response = _invoke_json_bool(
             llm,
             GRADE_PROMPT.format(query=query, document=document.page_content[:1500]),
-        ).lower()
-        results.append(response.startswith("yes"))
+            "relevant",
+        )
+        results.append(bool(response))
     return results
 
 
@@ -125,8 +162,13 @@ def default_grounding(llm: Any, answer: str, documents: list[Document]) -> bool:
     if "do not have enough information" in answer.lower():
         return True
     context = "\n\n".join(document.page_content for document in documents)
-    response = _invoke_text(llm, GROUNDING_PROMPT.format(context=context, answer=answer)).lower()
-    return response.startswith("yes")
+    return bool(
+        _invoke_json_bool(
+            llm,
+            GROUNDING_PROMPT.format(context=context, answer=answer),
+            "grounded",
+        )
+    )
 
 
 def default_direct_answer(llm: Any, query: str) -> str:
@@ -198,6 +240,20 @@ def make_grade_node(dependencies: GraphDependencies):
         relevant = [
             document for document, is_relevant in zip(documents, flags, strict=False) if is_relevant
         ]
+
+        # Safety net: when the LLM judge finds nothing relevant, fall back to the
+        # deterministic local reranker before triggering a corrective rewrite. LLM
+        # judges can produce false negatives, which would otherwise discard good
+        # candidates and force unnecessary query rewrites.
+        reranker = dependencies.reranker
+        reranker_usable = reranker is not None and bool(getattr(reranker, "enabled", True))
+        if not relevant and documents and reranker_usable:
+            reranked = list(reranker.compress_documents(list(documents), query))
+            kept_contents = {document.page_content for document in reranked}
+            relevant = [
+                document for document in documents if document.page_content in kept_contents
+            ]
+
         return {
             "retrieved_chunks": relevant,
             "retrieved_source_ids": [_source_id(document) for document in relevant],

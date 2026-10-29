@@ -54,6 +54,28 @@ def main(argv: list[str] | None = None) -> int:
         "skipped": [str(path) for path in result.skipped],
     }
     print(json.dumps(summary, indent=2))
+
+    # Ingest and index in one pass so a freshly added corpus is immediately
+    # usable by retrieval. Indexing is incremental via the index manifest.
+    if result.documents:
+        from chunking import chunk_documents
+        from retrieval import BM25Index, create_vector_store, index_chunks
+
+        settings = get_settings()
+        chunks = chunk_documents(result.documents)
+        if chunks:
+            vector_store = create_vector_store(settings)
+            bm25_index = BM25Index(k=settings.top_k)
+            index_result = index_chunks(
+                chunks,
+                vector_store,
+                bm25_index,
+                manifest_path=settings.project_root / "var" / "index" / "manifest.json",
+                chunk_store_path=settings.project_root / "var" / "index" / "chunks.jsonl",
+            )
+            summary["indexed_chunks"] = index_result.total_count
+            summary["new_chunks"] = index_result.new_count
+
     return 0
 
 

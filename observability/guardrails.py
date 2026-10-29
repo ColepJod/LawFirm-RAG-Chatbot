@@ -49,6 +49,22 @@ def detect_pii(text: str) -> list[str]:
     return []
 
 
+REFUSAL_MARKERS = (
+    "do not have enough information",
+    "cannot answer",
+    "insufficient",
+    "no information",
+    "not have enough",
+)
+
+
+def is_refusal(answer: str) -> bool:
+    """Return True when the answer is a refusal rather than a grounded answer."""
+
+    normalized = (answer or "").lower()
+    return any(marker in normalized for marker in REFUSAL_MARKERS)
+
+
 class RateLimiterPlaceholder:
     """No-op rate limiter used until a real backend is configured."""
 
@@ -74,6 +90,10 @@ class OutputGuardrails:
         if not source_markers:
             return GuardrailResult(True, [])
 
+        # Refusals are legitimate grounded outcomes and do not need citations.
+        if is_refusal(answer):
+            return GuardrailResult(True, [])
+
         missing = [marker for marker in source_markers if marker not in answer]
         if len(missing) == len(source_markers):
             return GuardrailResult(False, ["answer does not cite any retrieved source"])
@@ -82,7 +102,6 @@ class OutputGuardrails:
     def validate_refusal(self, answer: str, documents: list[Any]) -> GuardrailResult:
         if documents:
             return GuardrailResult(True, [])
-        refusal_markers = ("do not have enough information", "cannot answer", "insufficient")
-        if any(marker in answer.lower() for marker in refusal_markers):
+        if is_refusal(answer):
             return GuardrailResult(True, [])
         return GuardrailResult(False, ["answer was generated without supporting context"])

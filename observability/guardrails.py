@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +13,9 @@ from config import get_settings
 class GuardrailResult:
     allowed: bool
     reasons: list[str]
+
+
+CITATION_PATTERN = re.compile(r"\[\s*\d+\s*,", re.IGNORECASE)
 
 
 class InputGuardrails:
@@ -94,13 +98,24 @@ class OutputGuardrails:
         if is_refusal(answer):
             return GuardrailResult(True, [])
 
-        missing = [marker for marker in source_markers if marker not in answer]
-        if len(missing) == len(source_markers):
+        cited = any(marker in answer for marker in source_markers) or bool(
+            CITATION_PATTERN.search(answer)
+        )
+        if not cited:
             return GuardrailResult(False, ["answer does not cite any retrieved source"])
         return GuardrailResult(True, [])
 
-    def validate_refusal(self, answer: str, documents: list[Any]) -> GuardrailResult:
+    def validate_refusal(
+        self,
+        answer: str,
+        documents: list[Any],
+        expect_context: bool | None = None,
+    ) -> GuardrailResult:
         if documents:
+            return GuardrailResult(True, [])
+        if not expect_context:
+            # Direct answers (chit-chat, out-of-scope) are not retrieval-based
+            # and therefore do not require a refusal.
             return GuardrailResult(True, [])
         if is_refusal(answer):
             return GuardrailResult(True, [])

@@ -148,11 +148,13 @@ async def chat(request: ChatRequest, state: AppState = Depends(get_state)):
     retrieved_source_ids = list(result.get("retrieved_source_ids", []))
     grounding_verdict = str(result.get("grounding_verdict", ""))
 
-    output_validation = state.output_guardrails.validate_citations(
-        answer, result.get("reranked_chunks", []) or result.get("retrieved_chunks", [])
-    )
+    documents = list(result.get("reranked_chunks", []) or result.get("retrieved_chunks", []) or [])
+    route_decision = str(result.get("route_decision") or "")
+    expected_context = route_decision == "rag" or bool(documents)
+
+    output_validation = state.output_guardrails.validate_citations(answer, documents)
     refusal_validation = state.output_guardrails.validate_refusal(
-        answer, result.get("reranked_chunks", []) or result.get("retrieved_chunks", [])
+        answer, documents, expect_context=expected_context
     )
     if not output_validation.allowed or not refusal_validation.allowed:
         state.error_count += 1

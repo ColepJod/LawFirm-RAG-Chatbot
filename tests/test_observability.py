@@ -34,11 +34,31 @@ def test_output_guardrail_requires_source_citation(tmp_path: Path) -> None:
     assert result.allowed is False
 
 
+def test_output_guardrail_accepts_numbered_citation_answer(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    doc = type("Doc", (), {"metadata": {"source_file": "rag_chatbot.txt"}})()
+    answer = (
+        "Hawthorne Bell & Lawson LLP (HBL) is a fictional law firm "
+        "[2, Document Purpose and Entity Identification, p. 1]."
+    )
+    result = OutputGuardrails(settings).validate_citations(answer, [doc])
+
+    assert result.allowed is True
+
+
 def test_output_guardrail_accepts_refusal_without_context(tmp_path: Path) -> None:
     settings = make_settings(tmp_path)
     result = OutputGuardrails(settings).validate_refusal("I do not have enough information.", [])
 
     assert result.allowed is True
+
+
+def test_output_guardrail_allows_non_context_answer_for_chit_chat(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    result = OutputGuardrails(settings).validate_refusal("Hello! How can I assist you today?", [])
+
+    assert result.allowed is True
+    assert result.reasons == []
 
 
 def test_health_check_reports_checks(tmp_path: Path) -> None:

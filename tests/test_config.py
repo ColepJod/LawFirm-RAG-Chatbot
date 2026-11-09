@@ -44,6 +44,9 @@ def test_hardened_deployment_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.max_upload_mb == 25
     assert settings.admin_api_token is None
     assert settings.chat_stream_enabled is True
+    assert settings.grader_mode == "reranker"
+    assert settings.retrieval_cache_size == 128
+    assert settings.warmup_on_startup is True
 
 
 def test_index_fingerprint_tracks_semantic_settings() -> None:

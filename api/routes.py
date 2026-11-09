@@ -136,6 +136,18 @@ async def metrics(state: AppState = Depends(get_state)):
     trace_count = 0
     if state.trace_path is not None and state.trace_path.exists():
         trace_count = sum(1 for _ in state.trace_path.open(encoding="utf-8"))
+    caches: dict[str, object] = {}
+    for name, component in (
+        ("retrieval", state.dependencies.retriever if state.dependencies else None),
+        ("reranker", state.dependencies.reranker if state.dependencies else None),
+    ):
+        stats = getattr(component, "stats", None)
+        if callable(stats):
+            try:
+                caches[name] = stats()
+            except Exception:
+                logger.debug("failed to read %s cache stats", name, exc_info=True)
+
     return MetricsResponse(
         request_count=state.request_count,
         chat_count=state.chat_count,
@@ -143,6 +155,7 @@ async def metrics(state: AppState = Depends(get_state)):
         error_count=state.error_count,
         trace_count=trace_count,
         last_trace_path=str(state.trace_path) if state.trace_path else None,
+        caches=caches,
     )
 
 

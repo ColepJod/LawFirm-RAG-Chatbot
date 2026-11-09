@@ -86,7 +86,7 @@ def test_knowledge_question_routes_to_retrieval() -> None:
         page_content="Consultations cost $300.",
         metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
     )
-    llm = FakeLLM(["rag", "yes", "Consultations cost $300.", "yes"])
+    llm = FakeLLM(["rag", "Consultations cost $300.", "yes"])
     retriever = FakeRetriever([[doc]])
 
     result = invoke_graph(settings, llm, retriever)
@@ -99,7 +99,7 @@ def test_knowledge_question_routes_to_retrieval() -> None:
 
 
 def test_correction_rewrites_and_retrieves_again() -> None:
-    settings = make_settings()
+    settings = make_settings(grader_mode="llm")
     irrelevant = Document(
         page_content="Unrelated text.",
         metadata={"source_file": "other.md", "section_heading": "Other", "page_number": 1},
@@ -129,7 +129,7 @@ def test_correction_rewrites_and_retrieves_again() -> None:
 
 
 def test_llm_irrelevant_falls_back_to_reranker_before_rewrite() -> None:
-    settings = make_settings()
+    settings = make_settings(grader_mode="llm")
     doc = Document(
         page_content="Consultations cost $300.",
         metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
@@ -173,7 +173,7 @@ def test_grounding_failure_retries_generation() -> None:
         page_content="Consultations cost $300.",
         metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
     )
-    llm = FakeLLM(["rag", "yes", "Unsupported answer", "no", "Grounded answer", "yes"])
+    llm = FakeLLM(["rag", "Unsupported answer", "no", "Grounded answer", "yes"])
     retriever = FakeRetriever([[doc]])
 
     result = invoke_graph(settings, llm, retriever)
@@ -193,12 +193,10 @@ def test_multi_turn_condensation_uses_checkpointed_history() -> None:
     # so it does not consume an LLM response. The second needs an LLM route.
     llm = FakeLLM(
         [
-            "yes",
             "First answer",
             "yes",
             "rag",
             "standalone follow-up",
-            "yes",
             "Second answer",
             "yes",
         ]
@@ -222,6 +220,22 @@ def test_multi_turn_condensation_uses_checkpointed_history() -> None:
     assert first["generation"] == "First answer"
     assert second["generation"] == "Second answer"
     assert retriever.queries == ["What is the consultation rate?", "standalone follow-up"]
+
+
+def test_default_grader_mode_skips_llm_relevance_calls() -> None:
+    settings = make_settings()
+    doc = Document(
+        page_content="Consultations cost $300.",
+        metadata={"source_file": "rates.md", "section_heading": "Billing"},
+    )
+    # route -> generate -> grounding. No per-document "yes" grade response.
+    llm = FakeLLM(["rag", "Consultations cost $300.", "yes"])
+    retriever = FakeRetriever([[doc]])
+
+    result = invoke_graph(settings, llm, retriever)
+
+    assert result["generation"] == "Consultations cost $300."
+    assert result["grounding_verdict"] == "pass"
 
 
 def test_sqlite_checkpointer_creates_database(tmp_path) -> None:

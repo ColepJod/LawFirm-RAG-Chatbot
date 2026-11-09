@@ -64,3 +64,4 @@ class MetricsResponse(BaseModel):
     error_count: int
     trace_count: int
     last_trace_path: str | None
+    caches: dict[str, Any] = Field(default_factory=dict)

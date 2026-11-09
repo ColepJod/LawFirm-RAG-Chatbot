@@ -409,21 +409,38 @@ def make_grade_node(dependencies: GraphDependencies):
             state.get("standalone_query") or state.get("original_query") or _current_query(state)
         )
         documents = list(state.get("retrieved_chunks", []))
-        grader = dependencies.grader or (
-            lambda value, docs: default_grade(dependencies.llm, value, docs)
-        )
-        flags = grader(query, documents)
-        relevant = [
-            document for document, is_relevant in zip(documents, flags, strict=False) if is_relevant
-        ]
 
-        # Safety net: when the LLM judge finds nothing relevant, fall back to the
-        # deterministic local reranker before triggering a corrective rewrite. LLM
-        # judges can produce false negatives, which would otherwise discard good
-        # candidates and force unnecessary query rewrites.
+        if dependencies.grader is not None:
+            flags = dependencies.grader(query, documents)
+            relevant = [
+                document
+                for document, is_relevant in zip(documents, flags, strict=False)
+                if is_relevant
+            ]
+        elif dependencies.settings.grader_mode == "llm":
+            flags = default_grade(dependencies.llm, query, documents)
+            relevant = [
+                document
+                for document, is_relevant in zip(documents, flags, strict=False)
+                if is_relevant
+            ]
+        else:
+            # Default: the local cross-encoder in the next node decides relevance.
+            # This removes one LLM call per retrieved document from the hot path.
+            relevant = documents
+
+        # Safety net for LLM grading: when the judge finds nothing relevant, fall
+        # back to the deterministic reranker before triggering a corrective
+        # rewrite. LLM judges can produce false negatives, which would otherwise
+        # discard good candidates.
         reranker = dependencies.reranker
         reranker_usable = reranker is not None and bool(getattr(reranker, "enabled", True))
-        if not relevant and documents and reranker_usable:
+        if (
+            dependencies.settings.grader_mode == "llm"
+            and not relevant
+            and documents
+            and reranker_usable
+        ):
             reranked = list(reranker.compress_documents(list(documents), query))
             kept_contents = {document.page_content for document in reranked}
             relevant = [

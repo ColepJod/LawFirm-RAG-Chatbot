@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from api.security import TokenBucketRateLimiter
 from api.state import AppState
 from config import apply_model_cache_environment, get_settings
@@ -16,7 +18,10 @@ from retrieval import (
     create_vector_store,
     load_indexed_chunks,
 )
+from retrieval.cache import CachedReranker, CachedRetriever
 from retrieval.hybrid import build_hybrid_retriever
+
+logger = logging.getLogger(__name__)
 
 
 def build_app_state(settings=None) -> AppState:
@@ -35,8 +40,14 @@ def build_app_state(settings=None) -> AppState:
     fingerprint = settings.index_fingerprint
     fingerprint_ok = manifest.fingerprint is None or manifest.fingerprint == fingerprint
 
-    retriever = build_hybrid_retriever(settings, vector_store, bm25_index)
-    reranker = create_reranker(settings)
+    retriever = CachedRetriever(
+        build_hybrid_retriever(settings, vector_store, bm25_index),
+        max_entries=settings.retrieval_cache_size,
+    )
+    reranker = CachedReranker(
+        create_reranker(settings),
+        max_entries=settings.retrieval_cache_size,
+    )
     trace_logger = TraceLogger(settings)
     checkpointer = create_checkpointer(settings)
 
@@ -49,7 +60,7 @@ def build_app_state(settings=None) -> AppState:
     )
     graph = build_graph(dependencies, checkpointer=checkpointer)
 
-    return AppState(
+    state = AppState(
         settings=settings,
         graph=graph,
         dependencies=dependencies,
@@ -65,13 +76,38 @@ def build_app_state(settings=None) -> AppState:
         index_fingerprint_ok=fingerprint_ok,
         rate_limiter=TokenBucketRateLimiter(settings.rate_limit_per_minute),
     )
+    warmup_state(state)
+    return state
+
+
+def warmup_state(state: AppState) -> None:
+    """Load embedding/reranker models and prime the caches before the first query.
+
+    This is best-effort: a missing model or offline machine must not prevent the
+    API from starting. The first real request will surface the same error.
+    """
+
+    if not state.settings.warmup_on_startup:
+        return
+    query = state.settings.warmup_query
+    try:
+        documents = state.dependencies.retriever.invoke(query)
+        reranker = state.dependencies.reranker
+        if documents and reranker is not None and getattr(reranker, "enabled", False):
+            reranker.compress_documents(documents, query)
+        logger.info("model warmup complete query=%r documents=%d", query, len(documents))
+    except Exception:
+        logger.warning("model warmup failed; first request may be slower", exc_info=True)
 
 
 def rebuild_retriever(state: AppState) -> None:
     """Refresh the retriever and graph after new documents are indexed."""
 
     with state.index_lock:
-        new_retriever = build_hybrid_retriever(state.settings, state.vector_store, state.bm25_index)
+        new_retriever = CachedRetriever(
+            build_hybrid_retriever(state.settings, state.vector_store, state.bm25_index),
+            max_entries=state.settings.retrieval_cache_size,
+        )
         state.dependencies.retriever = new_retriever
         # Reuse the existing checkpointer; otherwise every reindex silently
         # discards the conversation state.

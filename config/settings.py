@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     reranker_max_length: int = Field(default=512, ge=64, le=8192)
     reranker_device: Literal["auto", "cpu", "cuda", "mps"] = "auto"
 
+    # reranker = local cross-encoder filters candidates (default, no LLM calls)
+    # llm      = per-document LLM relevance judge (slower, useful for debugging)
+    grader_mode: Literal["reranker", "llm"] = "reranker"
+    retrieval_cache_size: int = Field(default=128, ge=0, le=10000)
+    warmup_on_startup: bool = True
+    warmup_query: str = Field(default="firm overview", min_length=1, max_length=500)
+
     llm_provider: Literal["ollama", "vllm", "groq"] = "groq"
     llm_model: str = ""
     llm_base_url: str = "http://127.0.0.1:11434"

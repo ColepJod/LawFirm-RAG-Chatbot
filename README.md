@@ -232,16 +232,22 @@ packages.
 cp .env.example .env
 ```
 
-For a CPU-only machine, the default `RESOURCE_PROFILE=cpu` is appropriate. To
-use Ollama locally:
+For a CPU-only machine, the default `RESOURCE_PROFILE=cpu` is appropriate. The
+example environment uses local Ollama so no cloud key is needed:
 
 ```dotenv
 LLM_PROVIDER=ollama
 LLM_BASE_URL=http://127.0.0.1:11434
-LLM_MODEL=qwen3:4b
+# LLM_MODEL is optional; the cpu profile supplies qwen3:4b.
 ```
 
-For Groq:
+Pull the local model once:
+
+```bash
+ollama pull qwen3:4b
+```
+
+To use hosted Groq instead:
 
 ```dotenv
 LLM_PROVIDER=groq

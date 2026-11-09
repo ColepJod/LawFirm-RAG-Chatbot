@@ -245,7 +245,8 @@ def test_env_example_is_loadable() -> None:
 
     assert settings.resource_profile == "cpu"
     assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
-    assert settings.llm_model == "qwen/qwen3.8-27b"
+    assert settings.llm_provider == "ollama"
+    assert settings.llm_model == "qwen3:4b"
     assert settings.llm_api_key is None
 
 

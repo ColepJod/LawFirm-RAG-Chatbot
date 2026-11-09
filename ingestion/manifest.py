@@ -36,6 +36,18 @@ class IngestionManifest:
     def record(self, document_hash: str, metadata: dict[str, object]) -> None:
         self.entries[document_hash] = metadata
 
+    def remove_by_source(self, source_file: str) -> int:
+        """Forget ingestion entries for one source so it can be re-uploaded."""
+
+        stale = [
+            document_hash
+            for document_hash, metadata in self.entries.items()
+            if isinstance(metadata, dict) and metadata.get("source_file") == source_file
+        ]
+        for document_hash in stale:
+            self.entries.pop(document_hash, None)
+        return len(stale)
+
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")

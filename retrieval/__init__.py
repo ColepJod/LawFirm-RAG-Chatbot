@@ -13,6 +13,7 @@ from retrieval.indexing import (
     default_index_manifest_path,
     index_chunks,
     load_indexed_chunks,
+    remove_source,
     source_file_of,
 )
 from retrieval.retrievers import build_retrievers, create_bm25_retriever, create_dense_retriever
@@ -37,6 +38,7 @@ __all__ = [
     "default_index_manifest_path",
     "index_chunks",
     "load_indexed_chunks",
+    "remove_source",
     "resolve_device",
     "rrf_fuse",
     "source_file_of",

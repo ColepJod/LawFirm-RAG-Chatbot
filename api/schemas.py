@@ -52,6 +52,34 @@ class ErrorResponse(BaseModel):
     details: Any = None
 
 
+class JobResponse(BaseModel):
+    job_id: str
+    kind: str
+    status: str
+    created_at: float
+    updated_at: float
+    documents: int = 0
+    chunks: int = 0
+    message: str | None = None
+    error: str | None = None
+
+
+class DocumentInfo(BaseModel):
+    source_file: str
+    chunks: int
+
+
+class DocumentsResponse(BaseModel):
+    documents: list[DocumentInfo] = Field(default_factory=list)
+    total_chunks: int = 0
+
+
+class DeleteDocumentResponse(BaseModel):
+    status: str
+    source_file: str
+    removed_chunks: int
+
+
 class HealthResponse(BaseModel):
     status: str
     checks: dict[str, Any]

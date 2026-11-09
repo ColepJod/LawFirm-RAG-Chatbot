@@ -300,3 +300,44 @@ def index_chunks(
         total_count=len(combined),
         fingerprint=current_fingerprint,
     )
+
+
+def remove_source(
+    source_file: str,
+    vector_store: VectorStoreHandle,
+    bm25_index: BM25Index,
+    *,
+    manifest_path: Path | None = None,
+    chunk_store_path: Path | None = None,
+) -> int:
+    """Remove every indexed chunk that belongs to ``source_file``.
+
+    Returns the number of removed chunks. The chunk store stays authoritative:
+    only IDs present in the store are deleted from the vector database.
+    """
+
+    manifest_location = manifest_path or default_index_manifest_path()
+    store_location = chunk_store_path or default_chunk_store_path()
+    manifest = IndexManifest.load(manifest_location)
+    existing_chunks = load_indexed_chunks(store_location)
+
+    existing_ids = {chunk_id(chunk) for chunk in existing_chunks}
+    removed_ids = {
+        chunk_id(chunk) for chunk in existing_chunks if source_file_of(chunk) == source_file
+    }
+    removed_ids.update(
+        chunk_id for chunk_id in manifest.files.get(source_file, []) if chunk_id in existing_ids
+    )
+    if not removed_ids:
+        return 0
+
+    remaining = [chunk for chunk in existing_chunks if chunk_id(chunk) not in removed_ids]
+    with contextlib.suppress(Exception):
+        vector_store.delete(list(removed_ids))
+
+    _rewrite_indexed_chunks(store_location, remaining)
+    bm25_index.replace_documents(remaining)
+    manifest.remove_ids(removed_ids)
+    manifest.rebuild_files(remaining)
+    manifest.save()
+    return len(removed_ids)

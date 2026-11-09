@@ -32,6 +32,11 @@ class FakeGraph:
         self.calls.append((payload, config))
         return self.result
 
+    async def astream(self, payload, config=None, stream_mode="updates"):
+        self.calls.append((payload, config))
+        yield {"route": {"route_decision": "rag", "node_latencies": {"route": 1.0}}}
+        yield {"generate": self.result}
+
 
 def make_state(tmp_path: Path, **overrides) -> AppState:
     settings = Settings(
@@ -225,6 +230,104 @@ def test_chat_endpoint_warns_when_answer_has_no_citation(tmp_path: Path) -> None
 
     assert response.status_code == 200
     assert response.json()["warnings"]
+
+
+def test_chat_stream_emits_progress_and_done(tmp_path: Path) -> None:
+    state = make_state(tmp_path)
+
+    client = client_for(state)
+    with client.stream("POST", "/chat/stream", json={"query": "rate?"}) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: meta" in body
+    assert "event: progress" in body
+    assert "event: done" in body
+    assert "Consultations cost $300 [1]." in body
+
+
+def test_chat_stream_rejects_invalid_input(tmp_path: Path) -> None:
+    state = make_state(tmp_path)
+
+    client = client_for(state)
+    response = client.post("/chat/stream", json={"query": "x" * 60})
+
+    assert response.status_code == 400
+
+
+def test_job_status_returns_404_for_unknown_job(tmp_path: Path) -> None:
+    state = make_state(tmp_path)
+
+    client = client_for(state)
+    response = client.get("/jobs/does-not-exist")
+
+    assert response.status_code == 404
+
+
+def test_ingestion_job_lifecycle_records_success(tmp_path: Path, monkeypatch) -> None:
+    from api import routes
+
+    state = make_state(tmp_path)
+    source = tmp_path / "notes.txt"
+    source.write_text("The Chicago office serves Midwest clients.", encoding="utf-8")
+    job_id = routes._create_job(state, "ingest")
+
+    monkeypatch.setattr(
+        routes,
+        "ingest_file",
+        lambda *args, **kwargs: [
+            Document(page_content="notes", metadata={"source_file": "notes.txt"})
+        ],
+    )
+    monkeypatch.setattr(routes, "_index_documents", lambda *args, **kwargs: 4)
+
+    routes._ingest_path_task(state, job_id, source, source.parent)
+
+    client = client_for(state)
+    payload = client.get(f"/jobs/{job_id}").json()
+
+    assert payload["status"] == "succeeded"
+    assert payload["documents"] == 1
+    assert payload["chunks"] == 4
+
+
+def test_documents_endpoint_lists_indexed_sources(tmp_path: Path) -> None:
+    import json
+
+    state = make_state(tmp_path)
+    index_dir = state.settings.index_dir
+    index_dir.mkdir(parents=True, exist_ok=True)
+    records = [
+        {
+            "id": "a",
+            "page_content": "billing",
+            "metadata": {"source_file": "rates.md"},
+        },
+        {
+            "id": "b",
+            "page_content": "hours",
+            "metadata": {"source_file": "office.md"},
+        },
+        {
+            "id": "c",
+            "page_content": "more billing",
+            "metadata": {"source_file": "rates.md"},
+        },
+    ]
+    (index_dir / "chunks.jsonl").write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    client = client_for(state)
+    payload = client.get("/documents").json()
+
+    assert payload["total_chunks"] == 3
+    assert payload["documents"] == [
+        {"source_file": "office.md", "chunks": 1},
+        {"source_file": "rates.md", "chunks": 2},
+    ]
 
 
 def test_ui_endpoint_returns_html(tmp_path: Path) -> None:

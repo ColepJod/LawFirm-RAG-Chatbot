@@ -14,6 +14,7 @@ from retrieval import (
     create_vector_store,
     index_chunks,
     load_indexed_chunks,
+    remove_source,
 )
 from retrieval.indexing import chunk_id
 
@@ -185,6 +186,64 @@ def test_index_chunks_rejects_settings_fingerprint_mismatch(tmp_path: Path) -> N
     )
     assert rebuilt.fingerprint == "fingerprint-b"
     assert rebuilt.total_count == 1
+
+
+def test_remove_source_deletes_only_that_documents_chunks(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    handle = create_vector_store(settings, FakeEmbeddings())
+    bm25 = BM25Index(k=2)
+    manifest_path = tmp_path / "var" / "index" / "manifest.json"
+    chunk_store_path = tmp_path / "var" / "index" / "chunks.jsonl"
+    chunks = [
+        Document(
+            page_content="billing rates",
+            metadata={"chunk_id": "rates-1", "source_file": "rates.md"},
+        ),
+        Document(
+            page_content="filing fees",
+            metadata={"chunk_id": "rates-2", "source_file": "rates.md"},
+        ),
+        Document(
+            page_content="office hours",
+            metadata={"chunk_id": "office-1", "source_file": "office.md"},
+        ),
+    ]
+    index_chunks(
+        chunks, handle, bm25, manifest_path=manifest_path, chunk_store_path=chunk_store_path
+    )
+
+    removed = remove_source(
+        "rates.md",
+        handle,
+        bm25,
+        manifest_path=manifest_path,
+        chunk_store_path=chunk_store_path,
+    )
+
+    stored = load_indexed_chunks(chunk_store_path)
+    assert removed == 2
+    assert [chunk.metadata["source_file"] for chunk in stored] == ["office.md"]
+    assert bm25.document_count() == 1
+    remaining = handle.similarity_search("billing rates", k=5)
+    assert all(document.metadata.get("source_file") != "rates.md" for document in remaining)
+
+
+def test_remove_source_returns_zero_for_unknown_source(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    handle = create_vector_store(settings, FakeEmbeddings())
+    bm25 = BM25Index(k=2)
+    manifest_path = tmp_path / "var" / "index" / "manifest.json"
+    chunk_store_path = tmp_path / "var" / "index" / "chunks.jsonl"
+
+    removed = remove_source(
+        "missing.md",
+        handle,
+        bm25,
+        manifest_path=manifest_path,
+        chunk_store_path=chunk_store_path,
+    )
+
+    assert removed == 0
 
 
 def test_bm25_retriever_returns_relevant_document() -> None:

@@ -47,10 +47,10 @@ generation = [
     "langchain-openai==1.7.2",
     "ollama==0.6.3",
 ]
+# Core evaluation is deterministic and dependency-free. Install this extra
+# only if you want the optional ragnarok-ai adapter in evaluation/ragnarok_adapter.py.
 evaluation = [
-    "llamella==0.1.0",
     "ragnarok-ai==1.11.0",
-    "ragas==0.4.3",
 ]
 api = [
     "fastapi==0.161.0",

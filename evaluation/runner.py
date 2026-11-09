@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -10,14 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from config import Settings, get_settings
-from evaluation.golden_set import load_golden_set
-from evaluation.llamella_scorer import score_response
+from evaluation.golden_set import load_golden_set, section_key
 from evaluation.metrics import (
     hit_rate_at_k,
     precision_at_k,
     recall_at_k,
     reciprocal_rank,
 )
+from evaluation.scorer import score_response
 from evaluation.thresholds import check_thresholds
 
 
@@ -29,6 +30,7 @@ class EvaluationOutput:
     contexts: list[str] = field(default_factory=list)
     citations: list[str] = field(default_factory=list)
     retrieved_source_ids: list[str] = field(default_factory=list)
+    retrieved_section_keys: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -78,22 +80,30 @@ def default_pipeline_factory(settings: Settings | None = None) -> Pipeline:
     graph = build_graph(deps)
 
     def run(question: str) -> EvaluationOutput:
+        # Each golden item is an independent question. A fresh thread prevents
+        # checkpointed history from condensing one question with the previous one.
         result = graph.invoke(
             {"messages": [{"type": "human", "content": question}]},
             config={
-                "configurable": {"thread_id": "evaluation"},
+                "configurable": {"thread_id": f"evaluation-{uuid.uuid4().hex}"},
                 "recursion_limit": settings.max_graph_steps,
             },
         )
-        contexts = [
-            chunk.page_content
-            for chunk in result.get("reranked_chunks", []) or result.get("retrieved_chunks", [])
+        documents = result.get("reranked_chunks", []) or result.get("retrieved_chunks", []) or []
+        contexts = [document.page_content for document in documents]
+        retrieved_section_keys = [
+            section_key(
+                str((document.metadata or {}).get("source_file") or "unknown"),
+                str((document.metadata or {}).get("section_heading") or "document"),
+            )
+            for document in documents
         ]
         return EvaluationOutput(
             answer=str(result.get("generation", "")),
             contexts=contexts,
             citations=list(result.get("citations", [])),
             retrieved_source_ids=list(result.get("retrieved_source_ids", [])),
+            retrieved_section_keys=retrieved_section_keys,
         )
 
     return run
@@ -137,13 +147,21 @@ def run_evaluation(
 
     for item in items:
         result = pipeline(item.question)
-        llamella_metrics = score_response(
+        quality = score_response(
             query=item.question,
             response=result.answer,
             contexts=result.contexts,
+            expected_answer=item.expected_answer,
         )
-        relevant = set(item.relevant_source_ids)
-        retrieved = result.retrieved_source_ids or result.citations
+
+        # Prefer section keys: they survive re-chunking and document-hash
+        # changes. Fall back to chunk IDs for older golden sets.
+        if item.relevant_section_keys:
+            relevant = set(item.relevant_section_keys)
+            retrieved = result.retrieved_section_keys
+        else:
+            relevant = set(item.relevant_source_ids)
+            retrieved = result.retrieved_source_ids or result.citations
         precision = precision_at_k(retrieved, relevant, k)
         recall = recall_at_k(retrieved, relevant, k)
         rr = reciprocal_rank(retrieved, relevant)
@@ -155,10 +173,12 @@ def run_evaluation(
                 "category": item.category,
                 "answer": result.answer,
                 "citations": result.citations,
-                "retrieved_source_ids": retrieved,
+                "retrieved_source_ids": result.retrieved_source_ids,
+                "retrieved_section_keys": retrieved,
                 "expected_answer": item.expected_answer,
                 "relevant_source_ids": item.relevant_source_ids,
-                "llamella": llamella_metrics,
+                "relevant_section_keys": item.relevant_section_keys,
+                "quality": quality,
                 "retrieval": {
                     "precision_at_k": precision,
                     "recall_at_k": recall,
@@ -176,7 +196,7 @@ def run_evaluation(
             "confidence",
             "iqs",
         ):
-            value = llamella_metrics.get(metric)
+            value = quality.get(metric)
             if value is not None:
                 metric_values[metric].append(float(value))
         metric_values["retrieval_precision"].append(precision)
@@ -187,8 +207,6 @@ def run_evaluation(
     aggregate: dict[str, float] = {}
     for metric, values in metric_values.items():
         aggregate[metric] = (sum(values) / len(values)) if values else 0.0
-    aggregate["retrieval_precision"] = aggregate["retrieval_precision"]
-
     failures = check_thresholds(aggregate, settings) if should_fail else []
     passed = not failures
 
@@ -205,6 +223,8 @@ def run_evaluation(
             "confidence": settings.eval_confidence_min,
             "iqs": settings.eval_iqs_min,
             "retrieval_precision": settings.eval_retrieval_precision_min,
+            "retrieval_hit_rate": settings.eval_retrieval_hit_rate_min,
+            "reciprocal_rank": settings.eval_retrieval_mrr_min,
         },
         "failures": failures,
         "item_count": len(items),

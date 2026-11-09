@@ -17,6 +17,8 @@ def check_thresholds(metrics: dict[str, float], settings: Settings) -> list[str]
         "confidence": settings.eval_confidence_min,
         "iqs": settings.eval_iqs_min,
         "retrieval_precision": settings.eval_retrieval_precision_min,
+        "retrieval_hit_rate": settings.eval_retrieval_hit_rate_min,
+        "reciprocal_rank": settings.eval_retrieval_mrr_min,
     }
     for metric, threshold in checks.items():
         value = metrics.get(metric)

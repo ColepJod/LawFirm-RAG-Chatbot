@@ -11,6 +11,8 @@ from evaluation import (
     recall_at_k,
     reciprocal_rank,
     run_evaluation,
+    score_response,
+    section_key,
 )
 from evaluation.runner import EvaluationOutput
 
@@ -32,7 +34,7 @@ def test_load_golden_set(tmp_path: Path) -> None:
     path = tmp_path / "golden.jsonl"
     path.write_text(
         '{"question": "Q1", "expected_answer": "A1", "relevant_source_ids": ["s1"], '
-        '"category": "billing"}\n',
+        '"relevant_section_keys": ["doc.md::Billing"], "category": "billing"}\n',
         encoding="utf-8",
     )
 
@@ -41,6 +43,75 @@ def test_load_golden_set(tmp_path: Path) -> None:
     assert len(items) == 1
     assert items[0].question == "Q1"
     assert items[0].relevant_source_ids == ["s1"]
+    assert items[0].relevant_section_keys == ["doc.md::Billing"]
+    assert section_key("doc.md", "Billing") == "doc.md::Billing"
+
+
+def test_score_response_rewards_grounded_answers() -> None:
+    contexts = [
+        "Partner rates range from $850 to $1,050 per hour. Counsel rates range from "
+        "$525 to $575 per hour."
+    ]
+    grounded = score_response(
+        query="What is the partner rate range?",
+        response="Partner rates range from $850 to $1,050 per hour [1].",
+        contexts=contexts,
+        expected_answer="Partner rates range from $850 to $1,050 per hour.",
+    )
+    ungrounded = score_response(
+        query="What is the partner rate range?",
+        response="Partners charge $40 per hour and accept payment in cryptocurrency.",
+        contexts=contexts,
+        expected_answer="Partner rates range from $850 to $1,050 per hour.",
+    )
+
+    assert grounded["groundedness"] > ungrounded["groundedness"]
+    assert grounded["completeness"] > ungrounded["completeness"]
+    assert grounded["iqs"] > ungrounded["iqs"]
+    assert grounded["citation_ratio"] == 1.0
+
+
+def test_run_evaluation_matches_stable_section_keys(tmp_path: Path, monkeypatch) -> None:
+    golden_path = tmp_path / "golden.jsonl"
+    golden_path.write_text(
+        '{"question": "Q1", "expected_answer": "A1", "category": "billing", '
+        '"relevant_section_keys": ["doc.md::Billing"]}\n',
+        encoding="utf-8",
+    )
+    settings = make_settings(tmp_path)
+
+    def fake_score(query, response, contexts, **kwargs):
+        return {
+            "groundedness": 0.9,
+            "completeness": 0.9,
+            "relevance": 0.9,
+            "consistency": 0.9,
+            "confidence": 0.9,
+            "iqs": 0.9,
+        }
+
+    monkeypatch.setattr("evaluation.runner.score_response", fake_score)
+
+    def pipeline(question: str) -> EvaluationOutput:
+        return EvaluationOutput(
+            answer="A1",
+            contexts=["context"],
+            citations=["chunk-1"],
+            retrieved_source_ids=["chunk-1"],
+            retrieved_section_keys=["doc.md::Billing"],
+        )
+
+    report = run_evaluation(
+        settings=settings,
+        pipeline=pipeline,
+        golden_set_path=golden_path,
+        output_dir=settings.eval_output_dir,
+        fail_on_regression=True,
+        k=2,
+    )
+
+    assert report.metrics["retrieval_precision"] == 1.0
+    assert report.item_results[0]["retrieved_section_keys"] == ["doc.md::Billing"]
 
 
 def test_run_evaluation_with_fake_pipeline(tmp_path: Path, monkeypatch) -> None:
@@ -86,6 +157,39 @@ def test_run_evaluation_with_fake_pipeline(tmp_path: Path, monkeypatch) -> None:
     assert report.output_path.exists()
     saved = json.loads(report.output_path.read_text(encoding="utf-8"))
     assert saved["passed"] is True
+
+
+def test_build_golden_set_resolves_sections(tmp_path: Path, monkeypatch) -> None:
+    from evaluation import build_golden_set as module
+
+    chunks = tmp_path / "chunks.jsonl"
+    chunks.write_text(
+        json.dumps(
+            {
+                "id": "chunk-1",
+                "page_content": "Partner rates range from $850 to $1,050.",
+                "metadata": {
+                    "source_file": "doc.md",
+                    "section_heading": "4.1 Standard Hourly Rates",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    seed = module.GoldenSeed(
+        question="What is the partner rate range?",
+        expected_answer="$850 to $1,050 per hour.",
+        category="billing",
+        sections=("4.1",),
+        source_file="doc.md",
+    )
+    monkeypatch.setattr(module, "SEEDS", (seed,))
+
+    records = module.build_golden_set(chunks)
+
+    assert records[0]["relevant_section_keys"] == ["doc.md::4.1 Standard Hourly Rates"]
+    assert records[0]["category"] == "billing"
 
 
 def test_check_thresholds_reports_failures(tmp_path: Path) -> None:

@@ -8,6 +8,18 @@ from pathlib import Path
 from typing import Any
 
 
+def section_key(source_file: str, section: str) -> str:
+    """Build a stable, re-chunking-resistant relevance key.
+
+    Chunk IDs embed the document hash and chunk index, so they change whenever a
+    document is edited or the chunker is retuned. ``source_file::section`` stays
+    stable as long as the heading survives, which makes it the preferred key for
+    a maintained golden set.
+    """
+
+    return f"{source_file}::{section}"
+
+
 @dataclass
 class GoldenItem:
     """One evaluation question with optional expected answer and sources."""
@@ -15,6 +27,7 @@ class GoldenItem:
     question: str
     expected_answer: str | None = None
     relevant_source_ids: list[str] = field(default_factory=list)
+    relevant_section_keys: list[str] = field(default_factory=list)
     category: str = "general"
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -40,6 +53,7 @@ def load_golden_set(path: Path) -> list[GoldenItem]:
                 question=str(record["question"]),
                 expected_answer=record.get("expected_answer"),
                 relevant_source_ids=list(record.get("relevant_source_ids", [])),
+                relevant_section_keys=list(record.get("relevant_section_keys", [])),
                 category=str(record.get("category", "general")),
                 metadata=dict(record.get("metadata", {})),
             )

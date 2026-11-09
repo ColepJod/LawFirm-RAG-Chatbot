@@ -1,7 +1,6 @@
 """Local-first evaluation harness (Step 9)."""
 
-from evaluation.golden_set import GoldenItem, load_golden_set
-from evaluation.llamella_scorer import score_response
+from evaluation.golden_set import GoldenItem, load_golden_set, section_key
 from evaluation.metrics import (
     hit_rate_at_k,
     mean_reciprocal_rank,
@@ -10,6 +9,7 @@ from evaluation.metrics import (
     reciprocal_rank,
 )
 from evaluation.runner import EvaluationOutput, EvaluationReport, run_evaluation
+from evaluation.scorer import score_response
 from evaluation.thresholds import check_thresholds
 
 __all__ = [
@@ -25,4 +25,5 @@ __all__ = [
     "reciprocal_rank",
     "run_evaluation",
     "score_response",
+    "section_key",
 ]

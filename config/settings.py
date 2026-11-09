@@ -155,9 +155,13 @@ class Settings(BaseSettings):
     eval_consistency_min: float = Field(default=0.80, ge=0.0, le=1.0)
     eval_confidence_min: float = Field(default=0.70, ge=0.0, le=1.0)
     eval_iqs_min: float = Field(default=0.80, ge=0.0, le=1.0)
-    eval_retrieval_precision_min: float = Field(default=0.75, ge=0.0, le=1.0)
+    # Precision is naturally low when each golden item names one relevant
+    # section and the retriever returns top-k chunks. Keep a low floor to catch
+    # useless retrieval, and gate quality on hit rate and reciprocal rank.
+    eval_retrieval_precision_min: float = Field(default=0.15, ge=0.0, le=1.0)
+    eval_retrieval_hit_rate_min: float = Field(default=0.95, ge=0.0, le=1.0)
+    eval_retrieval_mrr_min: float = Field(default=0.85, ge=0.0, le=1.0)
     eval_fail_on_regression: bool = True
-    ragas_enabled: bool = False
     eval_judge_model: str = ""
     ragnarok_checkpoint_dir: Path = Path("var/eval/checkpoints")
 

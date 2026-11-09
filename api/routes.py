@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import queue
+import threading
 import time
 import uuid
 from collections import Counter
@@ -555,13 +558,37 @@ async def chat_stream(
             {"request_id": request_id, "thread_id": conversation_id},
         )
         accumulated: dict = {}
+        updates: queue.Queue = queue.Queue()
+
+        def produce() -> None:
+            """Run the sync graph in a worker thread.
+
+            The SQLite checkpointer is synchronous, so it cannot back
+            ``graph.astream``. A thread keeps the sync checkpoint contract while
+            the request coroutine stays responsive.
+            """
+
+            try:
+                for chunk in state.graph.stream(graph_input, config=config, stream_mode="updates"):
+                    updates.put(("chunk", chunk))
+            except Exception as exc:
+                updates.put(("error", exc))
+            else:
+                updates.put(("end", None))
+
+        worker = threading.Thread(target=produce, name="chat-stream", daemon=True)
+        worker.start()
+
         try:
-            async for chunk in state.graph.astream(
-                graph_input, config=config, stream_mode="updates"
-            ):
-                if not isinstance(chunk, dict):
+            while True:
+                kind, payload = await asyncio.to_thread(updates.get)
+                if kind == "end":
+                    break
+                if kind == "error":
+                    raise payload
+                if not isinstance(payload, dict):
                     continue
-                for node, update in chunk.items():
+                for node, update in payload.items():
                     if isinstance(update, dict):
                         accumulated.update(update)
                     latency = None

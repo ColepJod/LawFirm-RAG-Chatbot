@@ -3,230 +3,96 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
   <title>Law Firm RAG Chatbot</title>
-  <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --card: #1f2937;
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --accent: #38bdf8;
-      --user: #2563eb;
-      --assistant: #374151;
-      --border: #374151;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: linear-gradient(135deg, #020617, #0f172a);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .app {
-      width: min(900px, 100%);
-      height: min(800px, 90vh);
-      background: rgba(17, 24, 39, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-    }
-    .header {
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .title {
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-    .subtitle {
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-    .status {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    .messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .message {
-      max-width: 85%;
-      padding: 12px 14px;
-      border-radius: 14px;
-      line-height: 1.45;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    .user {
-      align-self: flex-end;
-      background: var(--user);
-    }
-    .assistant {
-      align-self: flex-start;
-      background: var(--assistant);
-      border: 1px solid var(--border);
-    }
-    .citations {
-      margin-top: 8px;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-    .composer {
-      border-top: 1px solid var(--border);
-      padding: 16px;
-      display: flex;
-      gap: 10px;
-      background: rgba(15, 23, 42, 0.7);
-    }
-    textarea {
-      flex: 1;
-      resize: none;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px;
-      background: #0b1220;
-      color: var(--text);
-      font: inherit;
-      min-height: 48px;
-      max-height: 140px;
-    }
-    button {
-      border: none;
-      border-radius: 12px;
-      padding: 0 18px;
-      background: var(--accent);
-      color: #082f49;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .thread {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    input.thread-id {
-      background: #0b1220;
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 6px 8px;
-      width: 180px;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="app">
-    <div class="header">
-      <div>
-        <div class="title">Law Firm RAG Chatbot</div>
-        <div class="subtitle">Ask questions about your ingested documents</div>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">L</div>
+        <div>
+          <h1>Law Firm Knowledge Assistant</h1>
+          <p class="brand-sub">Grounded answers from your indexed documents</p>
+        </div>
       </div>
-      <div class="thread">
-        Thread ID:
-        <input id="threadId" class="thread-id" />
-        <span id="status" class="status">Ready</span>
+      <div class="topbar-actions">
+        <span id="health" class="pill pill-muted" role="status">Checking…</span>
+        <button id="newChat" class="button button-ghost" type="button">New chat</button>
       </div>
-    </div>
-    <div id="messages" class="messages"></div>
-    <div class="composer">
-      <textarea id="query" placeholder="Ask a question..."></textarea>
-      <button id="send">Send</button>
-    </div>
+    </header>
+
+    <main class="workspace">
+      <section class="chat-panel" aria-label="Chat">
+        <div id="messages" class="messages" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <h2>Ask about firm policy, rates, offices, or practice areas</h2>
+            <p>Answers are grounded in your indexed corpus and include source references.</p>
+            <div class="suggestions">
+              <button class="suggestion" type="button" data-question="What are the firm's consultation fees?">Consultation fees</button>
+              <button class="suggestion" type="button" data-question="Which offices does the firm operate?">Office locations</button>
+              <button class="suggestion" type="button" data-question="What practice areas does the firm offer?">Practice areas</button>
+            </div>
+          </div>
+        </div>
+        <form id="composer" class="composer">
+          <label class="sr-only" for="query">Ask a question</label>
+          <textarea id="query" rows="1" placeholder="Ask a question… (Enter to send, Shift+Enter for a new line)" autocomplete="off"></textarea>
+          <button id="send" class="button button-primary" type="submit">Send</button>
+        </form>
+        <p class="disclaimer">Answers can be incomplete. Verify important legal information against the cited documents.</p>
+      </section>
+
+      <aside class="side-panel" aria-label="Sources and knowledge base">
+        <section class="card">
+          <div class="card-head">
+            <h2>Sources</h2>
+            <span id="sourceCount" class="pill pill-muted">0</span>
+          </div>
+          <div id="sources" class="sources">
+            <p class="muted">Ask a question to see the documents used for the answer.</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>Knowledge base</h2>
+            <button id="refreshDocs" class="button button-tiny" type="button">Refresh</button>
+          </div>
+          <div id="documents" class="documents">
+            <p class="muted">No indexed documents loaded.</p>
+          </div>
+        </section>
+
+        <details class="card admin-card">
+          <summary>Admin &amp; ingestion</summary>
+          <div class="admin-body">
+            <label class="field">
+              <span>Admin token</span>
+              <input id="adminToken" type="password" placeholder="X-Admin-Token" autocomplete="off" />
+            </label>
+            <form id="uploadForm" class="stack">
+              <label class="field">
+                <span>Upload document</span>
+                <input id="uploadFile" type="file" accept=".pdf,.md,.markdown,.txt,.docx" />
+              </label>
+              <button class="button button-secondary" type="submit">Upload &amp; index</button>
+            </form>
+            <form id="directoryForm" class="stack">
+              <label class="field">
+                <span>Index a server directory</span>
+                <input id="directoryPath" type="text" placeholder="data" />
+              </label>
+              <button class="button button-secondary" type="submit">Index directory</button>
+            </form>
+            <div id="jobStatus" class="job-status" role="status"></div>
+          </div>
+        </details>
+      </aside>
+    </main>
   </div>
 
-  <script>
-    const messagesEl = document.getElementById("messages");
-    const queryEl = document.getElementById("query");
-    const sendBtn = document.getElementById("send");
-    const statusEl = document.getElementById("status");
-    const threadEl = document.getElementById("threadId");
-
-    threadEl.value = localStorage.getItem("threadId") || "demo";
-    threadEl.addEventListener("change", () => localStorage.setItem("threadId", threadEl.value));
-
-    function addMessage(text, role, citations = []) {
-      const div = document.createElement("div");
-      div.className = "message " + role;
-      div.textContent = text;
-      if (citations && citations.length) {
-        const cite = document.createElement("div");
-        cite.className = "citations";
-        cite.textContent = "Sources: " + citations.join(" | ");
-        div.appendChild(cite);
-      }
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    async function send() {
-      const query = queryEl.value.trim();
-      if (!query) return;
-      queryEl.value = "";
-      addMessage(query, "user");
-      sendBtn.disabled = true;
-      statusEl.textContent = "Thinking...";
-      try {
-        const response = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, thread_id: threadEl.value })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          let message = response.statusText || "Request failed";
-          try {
-            const detail = data ? data.detail : null;
-            if (typeof detail === "string") {
-              message = detail;
-            } else if (detail) {
-              message = typeof detail === "object" ? JSON.stringify(detail) : String(detail);
-            }
-          } catch (err) {
-            message = response.statusText || "Request failed";
-          }
-          addMessage("Error: " + message, "assistant");
-        } else {
-          addMessage(data.answer || "No answer returned.", "assistant", data.citations || []);
-        }
-      } catch (err) {
-        addMessage("Network error: " + err.message, "assistant");
-      } finally {
-        sendBtn.disabled = false;
-        statusEl.textContent = "Ready";
-      }
-    }
-
-    sendBtn.addEventListener("click", send);
-    queryEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        send();
-      }
-    });
-  </script>
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>

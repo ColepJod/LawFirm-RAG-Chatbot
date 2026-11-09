@@ -32,7 +32,7 @@ class FakeGraph:
         self.calls.append((payload, config))
         return self.result
 
-    async def astream(self, payload, config=None, stream_mode="updates"):
+    def stream(self, payload, config=None, stream_mode="updates"):
         self.calls.append((payload, config))
         yield {"route": {"route_decision": "rag", "node_latencies": {"route": 1.0}}}
         yield {"generate": self.result}
@@ -339,6 +339,20 @@ def test_ui_endpoint_returns_html(tmp_path: Path) -> None:
     assert "text/html" in response.headers["content-type"]
     assert "Law Firm RAG Chatbot" in response.text
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_static_assets_are_served(tmp_path: Path) -> None:
+    state = make_state(tmp_path)
+    client = client_for(state)
+
+    script = client.get("/static/app.js")
+    stylesheet = client.get("/static/styles.css")
+
+    assert script.status_code == 200
+    assert "text/javascript" in script.headers["content-type"]
+    assert stylesheet.status_code == 200
+    assert "text/css" in stylesheet.headers["content-type"]
+    assert "/static/app.js" in client.get("/").text
 
 
 def test_ingest_endpoint_requires_input(tmp_path: Path) -> None:

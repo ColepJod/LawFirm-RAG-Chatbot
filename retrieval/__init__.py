@@ -1,23 +1,29 @@
 """Embedding, indexing, and retrieval components (Steps 4-6)."""
 
-from retrieval.bm25 import BM25Index
+from retrieval.bm25 import BM25Index, BM25Retriever, tokenize
 from retrieval.embeddings import create_embeddings, resolve_device
 from retrieval.fusion import HybridRRFRetriever, rrf_fuse
 from retrieval.hybrid import build_hybrid_retriever
 from retrieval.indexing import (
+    IndexFingerprintMismatch,
+    IndexManifest,
     IndexResult,
     chunk_id,
     default_chunk_store_path,
     default_index_manifest_path,
     index_chunks,
     load_indexed_chunks,
+    source_file_of,
 )
 from retrieval.retrievers import build_retrievers, create_bm25_retriever, create_dense_retriever
 from retrieval.vectorstores import VectorStoreHandle, create_vector_store
 
 __all__ = [
     "BM25Index",
+    "BM25Retriever",
     "HybridRRFRetriever",
+    "IndexFingerprintMismatch",
+    "IndexManifest",
     "IndexResult",
     "VectorStoreHandle",
     "build_hybrid_retriever",
@@ -33,4 +39,6 @@ __all__ = [
     "load_indexed_chunks",
     "resolve_device",
     "rrf_fuse",
+    "source_file_of",
+    "tokenize",
 ]

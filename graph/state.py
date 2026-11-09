@@ -26,6 +26,8 @@ class RAGState(TypedDict, total=False):
     generation: str
     grounding_verdict: str
     citations: list[str]
+    sources: list[dict[str, Any]]
+    citation_warnings: list[str]
     route_decision: str
     rewrite_count: int
     grounding_retry_count: int

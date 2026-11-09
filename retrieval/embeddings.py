@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
+
 import torch
 from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from config import apply_model_cache_environment, get_settings
+
+QUERY_CACHE_SIZE = 256
 
 
 class PrefixedHuggingFaceEmbeddings(HuggingFaceEmbeddings):
@@ -29,6 +34,8 @@ class LazyEmbeddings(Embeddings):
     def __init__(self, factory) -> None:
         self._factory = factory
         self._inner: PrefixedHuggingFaceEmbeddings | None = None
+        self._query_cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._cache_lock = threading.Lock()
 
     def _load(self) -> PrefixedHuggingFaceEmbeddings:
         if self._inner is None:
@@ -39,7 +46,20 @@ class LazyEmbeddings(Embeddings):
         return self._load().embed_documents(texts)
 
     def embed_query(self, text: str) -> list[float]:
-        return self._load().embed_query(text)
+        with self._cache_lock:
+            cached = self._query_cache.get(text)
+            if cached is not None:
+                self._query_cache.move_to_end(text)
+                return cached
+
+        vector = self._load().embed_query(text)
+
+        with self._cache_lock:
+            self._query_cache[text] = vector
+            self._query_cache.move_to_end(text)
+            while len(self._query_cache) > QUERY_CACHE_SIZE:
+                self._query_cache.popitem(last=False)
+        return vector
 
 
 def resolve_device(requested: str) -> str:

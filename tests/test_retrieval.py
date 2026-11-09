@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from config import Settings
 from retrieval import (
     BM25Index,
+    IndexFingerprintMismatch,
     VectorStoreHandle,
     create_vector_store,
     index_chunks,
@@ -108,6 +110,81 @@ def test_index_chunks_force_reindexes(tmp_path: Path) -> None:
 
     assert forced.new_count == 1
     assert forced.total_count == 1
+
+
+def test_index_chunks_replaces_stale_chunks_for_changed_document(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    handle = create_vector_store(settings, FakeEmbeddings())
+    bm25 = BM25Index(k=2)
+    manifest_path = tmp_path / "var" / "index" / "manifest.json"
+    chunk_store_path = tmp_path / "var" / "index" / "chunks.jsonl"
+
+    old = Document(
+        page_content="old billing policy",
+        metadata={"chunk_id": "chunk-old", "source_file": "policy.md"},
+    )
+    new = Document(
+        page_content="new billing policy",
+        metadata={"chunk_id": "chunk-new", "source_file": "policy.md"},
+    )
+
+    first = index_chunks(
+        [old], handle, bm25, manifest_path=manifest_path, chunk_store_path=chunk_store_path
+    )
+    second = index_chunks(
+        [new], handle, bm25, manifest_path=manifest_path, chunk_store_path=chunk_store_path
+    )
+
+    stored = load_indexed_chunks(chunk_store_path)
+    assert first.total_count == 1
+    assert second.removed_count == 1
+    assert second.new_count == 1
+    assert second.total_count == 1
+    assert [chunk.metadata["chunk_id"] for chunk in stored] == ["chunk-new"]
+    assert bm25.document_count() == 1
+
+
+def test_index_chunks_rejects_settings_fingerprint_mismatch(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    handle = create_vector_store(settings, FakeEmbeddings())
+    bm25 = BM25Index(k=2)
+    manifest_path = tmp_path / "var" / "index" / "manifest.json"
+    chunk_store_path = tmp_path / "var" / "index" / "chunks.jsonl"
+    chunk = Document(
+        page_content="billing rates",
+        metadata={"chunk_id": "chunk-1", "source_file": "rates.md"},
+    )
+
+    index_chunks(
+        [chunk],
+        handle,
+        bm25,
+        manifest_path=manifest_path,
+        chunk_store_path=chunk_store_path,
+        fingerprint="fingerprint-a",
+    )
+
+    with pytest.raises(IndexFingerprintMismatch):
+        index_chunks(
+            [chunk],
+            handle,
+            bm25,
+            manifest_path=manifest_path,
+            chunk_store_path=chunk_store_path,
+            fingerprint="fingerprint-b",
+        )
+
+    rebuilt = index_chunks(
+        [chunk],
+        handle,
+        bm25,
+        manifest_path=manifest_path,
+        chunk_store_path=chunk_store_path,
+        fingerprint="fingerprint-b",
+        force=True,
+    )
+    assert rebuilt.fingerprint == "fingerprint-b"
+    assert rebuilt.total_count == 1
 
 
 def test_bm25_retriever_returns_relevant_document() -> None:

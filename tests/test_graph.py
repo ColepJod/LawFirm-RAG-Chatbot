@@ -189,9 +189,10 @@ def test_multi_turn_condensation_uses_checkpointed_history() -> None:
         page_content="Consultations cost $300.",
         metadata={"source_file": "rates.md", "section_heading": "Billing", "page_number": 1},
     )
+    # The first question is routed by the deterministic firm-term heuristic,
+    # so it does not consume an LLM response. The second needs an LLM route.
     llm = FakeLLM(
         [
-            "rag",
             "yes",
             "First answer",
             "yes",
@@ -221,6 +222,21 @@ def test_multi_turn_condensation_uses_checkpointed_history() -> None:
     assert first["generation"] == "First answer"
     assert second["generation"] == "Second answer"
     assert retriever.queries == ["What is the consultation rate?", "standalone follow-up"]
+
+
+def test_sqlite_checkpointer_creates_database(tmp_path) -> None:
+    from graph import create_checkpointer
+
+    settings = make_settings(
+        checkpoint_backend="sqlite",
+        checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+    )
+    checkpointer = create_checkpointer(settings)
+
+    assert (tmp_path / "checkpoints.sqlite").exists()
+    connection = getattr(checkpointer, "conn", None)
+    if connection is not None:
+        connection.close()
 
 
 def test_out_of_scope_routes_away_from_retrieval() -> None:

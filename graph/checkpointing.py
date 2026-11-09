@@ -17,10 +17,17 @@ def create_checkpointer(settings=None, persistent: bool | None = None):
 
             from langgraph.checkpoint.sqlite import SqliteSaver
         except ImportError as exc:
-            raise RuntimeError("SQLite checkpointing requires langgraph-checkpoint-sqlite") from exc
+            raise RuntimeError(
+                "SQLite checkpointing requires langgraph-checkpoint-sqlite. "
+                "Install the orchestration extra or set CHECKPOINT_BACKEND=memory."
+            ) from exc
 
         settings.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(str(settings.checkpoint_db_path), check_same_thread=False)
+        connection = sqlite3.connect(
+            str(settings.checkpoint_db_path),
+            check_same_thread=False,
+            timeout=30.0,
+        )
         return SqliteSaver(connection)
 
     from langgraph.checkpoint.memory import MemorySaver

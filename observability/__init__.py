@@ -5,6 +5,7 @@ from observability.guardrails import (
     OutputGuardrails,
     RateLimiterPlaceholder,
     detect_pii,
+    detect_prompt_injection,
 )
 from observability.health import health_check
 from observability.tracing import RunTrace, TraceLogger
@@ -16,5 +17,6 @@ __all__ = [
     "RunTrace",
     "TraceLogger",
     "detect_pii",
+    "detect_prompt_injection",
     "health_check",
 ]

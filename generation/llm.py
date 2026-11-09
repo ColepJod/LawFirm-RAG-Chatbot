@@ -15,6 +15,9 @@ def create_llm(settings: Settings):
             model=settings.llm_model,
             base_url=settings.llm_base_url,
             temperature=settings.llm_temperature,
+            num_ctx=settings.llm_num_ctx,
+            num_predict=settings.llm_max_tokens,
+            keep_alive=settings.llm_keep_alive,
         )
 
     if settings.llm_provider == "vllm":
@@ -27,6 +30,9 @@ def create_llm(settings: Settings):
             if settings.llm_api_key
             else "not-needed",
             temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+            timeout=settings.llm_timeout_seconds,
+            max_retries=2,
         )
 
     if settings.llm_provider == "groq":
@@ -38,6 +44,9 @@ def create_llm(settings: Settings):
             model=settings.llm_model,
             api_key=settings.llm_api_key.get_secret_value(),
             temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+            timeout=settings.llm_timeout_seconds,
+            max_retries=2,
         )
 
     raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")

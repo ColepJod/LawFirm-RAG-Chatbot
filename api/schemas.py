@@ -10,14 +10,30 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=100000)
     thread_id: str | None = None
+    conversation_id: str | None = None
+
+
+class Source(BaseModel):
+    id: int
+    source_file: str
+    section: str = "document"
+    page: int | None = None
+    chunk_id: str = ""
+    score: float | None = None
+    snippet: str = ""
 
 
 class ChatResponse(BaseModel):
     answer: str
     citations: list[str] = Field(default_factory=list)
+    sources: list[Source] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     retrieved_source_ids: list[str] = Field(default_factory=list)
     grounding_verdict: str = ""
     thread_id: str
+    request_id: str = ""
+    latency_ms: float = 0.0
+    trace_id: str | None = None
 
 
 class IngestResponse(BaseModel):
@@ -25,6 +41,15 @@ class IngestResponse(BaseModel):
     ingested_documents: int = 0
     skipped_documents: int = 0
     manifest_path: str | None = None
+    job_id: str | None = None
+    message: str | None = None
+
+
+class ErrorResponse(BaseModel):
+    code: str
+    message: str
+    request_id: str = ""
+    details: Any = None
 
 
 class HealthResponse(BaseModel):

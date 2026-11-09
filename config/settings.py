@@ -8,6 +8,8 @@ directory, so the CLI and the API always agree on where data lives.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -26,6 +28,8 @@ PATH_FIELDS: tuple[str, ...] = (
     "upload_dir",
     "chroma_persist_dir",
     "qdrant_local_path",
+    "index_dir",
+    "checkpoint_db_path",
     "golden_set_path",
     "eval_output_dir",
     "ragnarok_checkpoint_dir",
@@ -69,7 +73,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Law Firm RAG"
-    environment: Literal["local", "staging", "test"] = "local"
+    environment: Literal["local", "staging", "production", "test"] = "local"
     resource_profile: Literal["standard", "cpu"] = "standard"
     project_root: Path = PROJECT_ROOT
     data_dir: Path = Path("data")
@@ -99,6 +103,8 @@ class Settings(BaseSettings):
     chroma_persist_dir: Path = Path("var/chroma")
     qdrant_url: str | None = None
     qdrant_local_path: Path = Path("var/qdrant")
+    index_dir: Path = Path("var/index")
+    index_fingerprint_mode: Literal["warn", "enforce"] = "enforce"
     top_k: int = Field(default=6, ge=1, le=50)
     dense_candidates: int = Field(default=20, ge=1, le=200)
     sparse_candidates: int = Field(default=20, ge=1, le=200)
@@ -107,6 +113,8 @@ class Settings(BaseSettings):
     sparse_weight: float = Field(default=0.5, ge=0.0, le=1.0)
     bm25_k1: float = Field(default=1.5, ge=0.0, le=10.0)
     bm25_b: float = Field(default=0.75, ge=0.0, le=1.0)
+    retrieval_min_rerank_score: float = Field(default=-10.0, ge=-100.0, le=100.0)
+    context_max_tokens: int = Field(default=4096, ge=256, le=131072)
 
     reranker_enabled: bool = True
     reranker_model: str = ""
@@ -125,8 +133,9 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = Field(default=180, ge=10, le=3600)
     llm_keep_alive: str = "5m"
 
-    checkpoint_backend: Literal["memory", "sqlite"] = "memory"
+    checkpoint_backend: Literal["memory", "sqlite"] = "sqlite"
     checkpoint_db_path: Path = Path("var/checkpoints.sqlite")
+    checkpoint_ttl_seconds: int = Field(default=86400, ge=60, le=2592000)
     max_query_rewrites: int = Field(default=2, ge=0, le=5)
     max_grounding_retries: int = Field(default=1, ge=0, le=5)
     max_graph_steps: int = Field(default=25, ge=6, le=50)
@@ -157,6 +166,11 @@ class Settings(BaseSettings):
     max_query_chars: int = Field(default=2000, ge=1, le=100000)
     pii_detection_enabled: bool = False
     rate_limit_per_minute: int = Field(default=60, ge=1, le=100000)
+    max_upload_mb: int = Field(default=25, ge=1, le=512)
+
+    admin_api_token: SecretStr | None = None
+    cors_origins: str = ""
+    chat_stream_enabled: bool = True
 
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
@@ -229,6 +243,11 @@ class Settings(BaseSettings):
         qdrant_has_target = bool(self.qdrant_url or self.qdrant_local_path)
         if self.vector_store_backend == "qdrant" and not qdrant_has_target:
             raise ValueError("Qdrant requires QDRANT_URL or QDRANT_LOCAL_PATH")
+        if self.api_workers > 1 and self.checkpoint_backend in {"memory", "sqlite"}:
+            raise ValueError(
+                "API_WORKERS must be 1 when CHECKPOINT_BACKEND is memory or sqlite; "
+                "use an external checkpoint store before scaling out"
+            )
 
         self.project_root = self.project_root.expanduser().resolve()
         for field_name in PATH_FIELDS:
@@ -243,6 +262,32 @@ class Settings(BaseSettings):
             path = self.project_root / path
         return path.resolve()
 
+    @property
+    def index_fingerprint(self) -> str:
+        """Fingerprint of every setting that changes vector semantics.
+
+        Query-only settings (for example ``EMBEDDING_QUERY_PREFIX``) are
+        intentionally excluded: changing them requires a query-time cache
+        flush, not a full reindex.
+        """
+
+        payload = {
+            "embedding_model": self.embedding_model,
+            "embedding_passage_prefix": self.embedding_passage_prefix,
+            "embedding_normalize": self.embedding_normalize,
+            "embedding_max_seq_length": self.embedding_max_seq_length,
+            "chunk_strategy": self.chunk_strategy,
+            "chunk_size": self.chunk_size,
+            "chunk_overlap": self.chunk_overlap,
+            "min_chunk_chars": self.min_chunk_chars,
+            "vector_store_backend": self.vector_store_backend,
+            "vector_store_collection": self.vector_store_collection,
+            "preserve_tables": self.preserve_tables,
+            "fingerprint_version": 1,
+        }
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
     def ensure_directories(self) -> list[Path]:
         """Create the runtime directories required by the application."""
 
@@ -251,6 +296,7 @@ class Settings(BaseSettings):
             self.artifacts_dir,
             self.local_model_cache_dir,
             self.upload_dir,
+            self.index_dir,
             self.log_dir,
             self.trace_dir,
             self.eval_output_dir,
@@ -268,7 +314,9 @@ class Settings(BaseSettings):
     def public_dict(self) -> dict[str, object]:
         """Return a JSON-safe, secret-redacted representation."""
 
-        return self.model_dump(mode="json")
+        payload = self.model_dump(mode="json")
+        payload["index_fingerprint"] = self.index_fingerprint
+        return payload
 
 
 @lru_cache(maxsize=1)

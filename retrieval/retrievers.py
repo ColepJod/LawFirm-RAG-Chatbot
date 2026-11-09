@@ -16,8 +16,7 @@ def create_dense_retriever(vector_store: VectorStoreHandle, k: int | None = None
 def create_bm25_retriever(bm25_index: BM25Index, k: int | None = None):
     settings = get_settings()
     top_k = settings.top_k if k is None else k
-    bm25_index.k = top_k
-    bm25_index._rebuild()
+    bm25_index.configure(k=top_k)
     return bm25_index.as_retriever()
 
 

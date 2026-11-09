@@ -31,6 +31,47 @@ def test_standard_profile_defaults() -> None:
     assert settings.eval_iqs_min == 0.80
 
 
+def test_hardened_deployment_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The test harness forces an in-memory checkpointer for isolation; inspect
+    # the real class default with that override removed.
+    monkeypatch.delenv("CHECKPOINT_BACKEND", raising=False)
+    settings = make_settings()
+
+    assert settings.checkpoint_backend == "sqlite"
+    assert settings.index_fingerprint_mode == "enforce"
+    assert settings.index_dir == PROJECT_ROOT / "var/index"
+    assert settings.context_max_tokens == 4096
+    assert settings.max_upload_mb == 25
+    assert settings.admin_api_token is None
+    assert settings.chat_stream_enabled is True
+
+
+def test_index_fingerprint_tracks_semantic_settings() -> None:
+    base = make_settings()
+
+    assert base.index_fingerprint == make_settings().index_fingerprint
+    assert base.index_fingerprint != make_settings(chunk_size=384).index_fingerprint
+    assert (
+        base.index_fingerprint
+        != make_settings(embedding_model="custom/other-embedding").index_fingerprint
+    )
+    # Query-only prefixes do not change stored vectors and must not force a reindex.
+    assert (
+        base.index_fingerprint == make_settings(embedding_query_prefix="query: ").index_fingerprint
+    )
+
+
+def test_sqlite_checkpoints_require_single_api_worker() -> None:
+    with pytest.raises(ValidationError, match="API_WORKERS"):
+        make_settings(api_workers=2)
+
+
+def test_public_dict_reports_index_fingerprint() -> None:
+    settings = make_settings()
+
+    assert settings.public_dict()["index_fingerprint"] == settings.index_fingerprint
+
+
 def test_cpu_profile_defaults() -> None:
     settings = make_settings(resource_profile="cpu")
 
@@ -124,6 +165,8 @@ def test_relative_paths_resolve_against_project_root() -> None:
 
     assert settings.project_root == PROJECT_ROOT
     assert settings.chroma_persist_dir == PROJECT_ROOT / "var/chroma"
+    assert settings.index_dir == PROJECT_ROOT / "var/index"
+    assert settings.checkpoint_db_path == PROJECT_ROOT / "var/checkpoints.sqlite"
     assert settings.local_model_cache_dir == PROJECT_ROOT / ".cache/huggingface"
 
 

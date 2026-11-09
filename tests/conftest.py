@@ -25,6 +25,9 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name in CACHE_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
 
+    # Unit tests should never create a real SQLite checkpoint file in the repo.
+    monkeypatch.setenv("CHECKPOINT_BACKEND", "memory")
+
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

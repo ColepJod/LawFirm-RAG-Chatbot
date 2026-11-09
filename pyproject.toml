@@ -21,6 +21,7 @@ dependencies = [
 orchestration = [
     "langchain==1.4.7",
     "langgraph==1.2.16",
+    "langgraph-checkpoint-sqlite==3.1.3",
     "langchain-community==0.4.2",
     "langchain-text-splitters==1.1.3",
 ]
@@ -43,6 +44,7 @@ retrieval = [
 generation = [
     "langchain-groq==1.1.3",
     "langchain-ollama==1.1.0",
+    "langchain-openai==1.7.2",
     "ollama==0.6.3",
 ]
 evaluation = [

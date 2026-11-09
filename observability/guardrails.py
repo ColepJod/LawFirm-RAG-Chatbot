@@ -17,6 +17,33 @@ class GuardrailResult:
 
 CITATION_PATTERN = re.compile(r"\[\s*\d+\s*,", re.IGNORECASE)
 
+PII_PATTERNS: dict[str, re.Pattern[str]] = {
+    "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    "credit_card": re.compile(r"\b(?:\d[ -]*?){13,19}\b"),
+    "phone": re.compile(r"\+?\d[\d .()-]{7,}\d"),
+    "email": re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"),
+}
+
+INJECTION_PATTERNS = (
+    "ignore previous instructions",
+    "ignore all previous",
+    "disregard previous",
+    "reveal your instructions",
+    "show your system prompt",
+    "print your system prompt",
+    "you are now",
+    "act as if you are",
+    "jailbreak",
+    "developer mode",
+)
+
+
+def detect_prompt_injection(text: str) -> list[str]:
+    """Return prompt-injection phrases found in user input."""
+
+    normalized = (text or "").lower()
+    return [pattern for pattern in INJECTION_PATTERNS if pattern in normalized]
+
 
 class InputGuardrails:
     """Validate user input before it reaches the graph."""
@@ -39,18 +66,21 @@ class InputGuardrails:
             if pii_findings:
                 reasons.append(f"potential PII detected: {', '.join(pii_findings)}")
 
-        # Rate limiting is intentionally a placeholder hook for a future
-        # production deployment. It never blocks in the local application.
-        if not RateLimiterPlaceholder().allow():
-            reasons.append("rate limit exceeded")
+        injection_findings = detect_prompt_injection(query)
+        if injection_findings:
+            reasons.append("possible prompt injection: " + ", ".join(injection_findings[:3]))
 
         return GuardrailResult(not reasons, reasons)
 
 
 def detect_pii(text: str) -> list[str]:
-    """Placeholder PII detector. Replace with a real detector in production."""
+    """Return the names of PII categories found in ``text``."""
 
-    return []
+    findings: list[str] = []
+    for name, pattern in PII_PATTERNS.items():
+        if pattern.search(text or ""):
+            findings.append(name)
+    return findings
 
 
 REFUSAL_MARKERS = (

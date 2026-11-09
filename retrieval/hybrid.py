@@ -20,12 +20,10 @@ def build_hybrid_retriever(
         raise ValueError("vector_store and bm25_index are required")
 
     dense_retriever = vector_store.as_retriever(k=settings.dense_candidates)
-    sparse_retriever = bm25_index.as_retriever() if bm25_index.document_count() else None
-    if sparse_retriever is None:
+    if not bm25_index.document_count():
         return dense_retriever
 
-    bm25_index.k = settings.sparse_candidates
-    bm25_index._rebuild()
+    bm25_index.configure(k=settings.sparse_candidates)
     sparse_retriever = bm25_index.as_retriever()
 
     return HybridRRFRetriever(

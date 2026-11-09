@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from langchain_core.documents import Document
@@ -15,7 +17,8 @@ def _document_key(document: Document) -> str:
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():
             return f"{key}:{value}"
-    return f"content:{hash(document.page_content)}"
+    digest = hashlib.sha256(document.page_content.encode("utf-8")).hexdigest()
+    return f"content:{digest}"
 
 
 def rrf_fuse(
@@ -75,8 +78,19 @@ class HybridRRFRetriever(BaseRetriever):
     weights: tuple[float, float] = (0.5, 0.5)
 
     def _get_relevant_documents(self, query: str) -> list[Document]:
-        dense_documents = self.dense_retriever.invoke(query)
-        sparse_documents = self.sparse_retriever.invoke(query)
+        # Dense and lexical retrievers are independent; running them in parallel
+        # keeps hybrid retrieval close to the slower of the two instead of their sum.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="retrieve") as executor:
+            dense_future = executor.submit(self.dense_retriever.invoke, query)
+            sparse_future = executor.submit(self.sparse_retriever.invoke, query)
+            dense_documents = dense_future.result()
+            try:
+                sparse_documents = sparse_future.result()
+            except Exception:
+                # A lexical failure must not take down an otherwise healthy
+                # dense search. The fused result degrades to dense-only.
+                sparse_documents = []
+
         return rrf_fuse(
             dense_documents,
             sparse_documents,

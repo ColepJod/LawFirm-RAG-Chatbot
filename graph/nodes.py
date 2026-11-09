@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from typing import Any
 
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage, HumanMessage
 
+from chunking.tokens import count_tokens, get_encoding
 from graph.prompts import (
     CONDENSE_PROMPT,
     DIRECT_ANSWER_PROMPT,
@@ -101,16 +104,171 @@ def _format_citation(document: Document) -> str:
     return f"{source} | {section} | {page_text}"
 
 
+def _format_context_block(index: int, document: Document) -> str:
+    metadata = document.metadata or {}
+    source = metadata.get("source_file") or metadata.get("source") or "unknown"
+    section = metadata.get("section_heading") or metadata.get("title") or "document"
+    page = metadata.get("page_number") or metadata.get("page_start")
+    page_text = f"p. {page}" if page is not None else "p. n/a"
+    return (
+        f"[{index}] Source: {source} | Section: {section} | Page: {page_text}\n"
+        f"{document.page_content}"
+    )
+
+
+def _source_payload(index: int, document: Document) -> dict[str, Any]:
+    metadata = document.metadata or {}
+    page = metadata.get("page_number") or metadata.get("page_start")
+    try:
+        page_number = int(page) if page is not None else None
+    except (TypeError, ValueError):
+        page_number = None
+    score = metadata.get("reranker_score", metadata.get("rrf_score", metadata.get("bm25_score")))
+    try:
+        score_value = float(score) if score is not None else None
+    except (TypeError, ValueError):
+        score_value = None
+    snippet = " ".join((document.page_content or "").split())
+    return {
+        "id": index,
+        "source_file": str(metadata.get("source_file") or metadata.get("source") or "unknown"),
+        "section": str(metadata.get("section_heading") or metadata.get("title") or "document"),
+        "page": page_number,
+        "chunk_id": _source_id(document),
+        "score": score_value,
+        "snippet": snippet[:420],
+    }
+
+
 def _source_id(document: Document) -> str:
     metadata = document.metadata or {}
     for key in ("chunk_id", "id", "document_hash"):
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():
             return value
-    return f"content:{hash(document.page_content)}"
+    return f"content:{hashlib.sha256((document.page_content or '').encode('utf-8')).hexdigest()}"
+
+
+def _extract_citation_indices(answer: str, document_count: int) -> list[int]:
+    """Extract leading numeric labels from square-bracket citations.
+
+    Handles ``[1]``, ``[1, 2]``, and ``[1, Section, p. 3]`` without treating a
+    page number later in the bracket as a separate source label.
+    """
+
+    indices: set[int] = set()
+    for content in re.findall(r"\[([^\]]+)\]", answer or ""):
+        for token in re.split(r"[,\s]+", content.strip()):
+            if not token:
+                continue
+            if token.isdigit():
+                value = int(token)
+                if 1 <= value <= document_count:
+                    indices.add(value)
+            else:
+                break
+    return sorted(indices)
+
+
+def _truncate_to_tokens(text: str, max_tokens: int) -> str:
+    if max_tokens <= 0:
+        return ""
+    encoding = get_encoding()
+    tokens = encoding.encode(text)
+    if len(tokens) <= max_tokens:
+        return text
+    return encoding.decode(tokens[:max_tokens])
+
+
+def _select_context(documents: list[Document], max_tokens: int) -> list[Document]:
+    """Select documents that fit the generation context budget."""
+
+    selected: list[Document] = []
+    used = 0
+    for document in documents:
+        block = _format_context_block(len(selected) + 1, document)
+        block_tokens = count_tokens(block)
+        if used + block_tokens <= max_tokens:
+            selected.append(document)
+            used += block_tokens
+            continue
+        if not selected:
+            # Keep at least one source, truncating its body rather than dropping it.
+            header_tokens = count_tokens(
+                _format_context_block(1, Document(page_content="", metadata=document.metadata))
+            )
+            budget = max(1, max_tokens - header_tokens)
+            truncated = _truncate_to_tokens(document.page_content, budget)
+            selected.append(
+                Document(page_content=truncated, metadata=dict(document.metadata or {}))
+            )
+        break
+    return selected
+
+
+def _heuristic_route(query: str) -> str | None:
+    normalized = (query or "").strip().lower()
+    if not normalized:
+        return "chit_chat"
+
+    firm_terms = (
+        "firm",
+        "attorney",
+        "lawyer",
+        "rate",
+        "fee",
+        "billing",
+        "office",
+        "location",
+        "practice",
+        "specialt",
+        "matter",
+        "client",
+        "intake",
+        "policy",
+        "consultation",
+        "contact",
+        "phone",
+        "email",
+        "cost",
+        "price",
+        "confidential",
+        "security",
+        "insurance",
+        "liability",
+        "patent",
+        "litigation",
+        "employment",
+        "corporate",
+        "real estate",
+        "intellectual property",
+        "pro bono",
+        "new york",
+        "chicago",
+        "california",
+        "washington",
+        "manhattan",
+        "document",
+        "contract",
+        "compliance",
+    )
+    if any(term in normalized for term in firm_terms):
+        return "rag"
+
+    if (
+        re.match(r"^(hi|hello|hey|good morning|good afternoon|thanks|thank you)\b", normalized)
+        and len(normalized.split()) <= 7
+    ):
+        return "chit_chat"
+
+    return None
 
 
 def default_route(llm: Any, query: str) -> str:
+    heuristic = _heuristic_route(query)
+    if heuristic is not None:
+        return heuristic
+
     response = _invoke_text(llm, ROUTE_PROMPT.format(query=query)).lower()
     if "chit" in response:
         return "chit_chat"
@@ -142,26 +300,42 @@ def default_grade(llm: Any, query: str, documents: list[Document]) -> list[bool]
     return results
 
 
-def default_generate(llm: Any, query: str, documents: list[Document]) -> tuple[str, list[str]]:
+def default_generate(
+    llm: Any,
+    query: str,
+    documents: list[Document],
+    *,
+    max_context_tokens: int = 4096,
+) -> tuple[str, list[str]]:
     if not documents:
         return (
             "I do not have enough information in the retrieved documents to answer that question.",
             [],
         )
+    selected = _select_context(documents, max_context_tokens)
     context = "\n\n".join(
-        f"[{index + 1}] {document.page_content}" for index, document in enumerate(documents)
+        _format_context_block(index + 1, document) for index, document in enumerate(selected)
     )
     answer = _invoke_text(llm, GENERATE_PROMPT.format(query=query, context=context))
-    citations = [_format_citation(document) for document in documents]
+    citations = [_format_citation(document) for document in selected]
     return answer, citations
 
 
-def default_grounding(llm: Any, answer: str, documents: list[Document]) -> bool:
+def default_grounding(
+    llm: Any,
+    answer: str,
+    documents: list[Document],
+    *,
+    max_context_tokens: int = 4096,
+) -> bool:
     if not documents:
         return True
     if "do not have enough information" in answer.lower():
         return True
-    context = "\n\n".join(document.page_content for document in documents)
+    selected = _select_context(documents, max_context_tokens)
+    context = "\n\n".join(
+        _format_context_block(index + 1, document) for index, document in enumerate(selected)
+    )
     return bool(
         _invoke_json_bool(
             llm,
@@ -192,6 +366,8 @@ def make_route_node(dependencies: GraphDependencies):
             "retrieved_source_ids": [],
             "reranked_chunks": [],
             "citations": [],
+            "sources": [],
+            "citation_warnings": [],
             "generation": "",
             "grounding_verdict": "",
             "node_latencies": {},
@@ -271,9 +447,19 @@ def make_rerank_node(dependencies: GraphDependencies):
         if not documents:
             return {"reranked_chunks": []}
         reranked = _rerank(dependencies.reranker, query, documents)
+        threshold = dependencies.settings.retrieval_min_rerank_score
+        filtered = []
+        for document in reranked:
+            score = (document.metadata or {}).get("reranker_score")
+            try:
+                if score is not None and float(score) < threshold:
+                    continue
+            except (TypeError, ValueError):
+                pass
+            filtered.append(document)
         return {
-            "reranked_chunks": list(reranked),
-            "retrieved_source_ids": [_source_id(document) for document in reranked]
+            "reranked_chunks": filtered,
+            "retrieved_source_ids": [_source_id(document) for document in filtered]
             or state.get("retrieved_source_ids", []),
         }
 
@@ -304,11 +490,37 @@ def make_generate_node(dependencies: GraphDependencies):
             state.get("standalone_query") or state.get("original_query") or _current_query(state)
         )
         documents = list(state.get("reranked_chunks") or state.get("retrieved_chunks", []))
-        generator = dependencies.generator or (
-            lambda value, docs: default_generate(dependencies.llm, value, docs)
-        )
-        answer, citations = generator(query, documents)
-        return {"generation": answer, "citations": citations}
+        selected = _select_context(documents, dependencies.settings.context_max_tokens)
+        generator = dependencies.generator
+        if generator is None:
+            answer, citations = default_generate(
+                dependencies.llm,
+                query,
+                selected,
+                max_context_tokens=dependencies.settings.context_max_tokens,
+            )
+        else:
+            answer, citations = generator(query, selected)
+
+        cited_indices = _extract_citation_indices(answer, len(selected))
+        if cited_indices:
+            sources = [_source_payload(index, selected[index - 1]) for index in cited_indices]
+            warnings: list[str] = []
+        else:
+            sources = [
+                _source_payload(index + 1, document) for index, document in enumerate(selected)
+            ]
+            warnings = (
+                ["The answer did not contain a citation marker; sources are shown unranked."]
+                if selected
+                else []
+            )
+        return {
+            "generation": answer,
+            "citations": citations,
+            "sources": sources,
+            "citation_warnings": warnings,
+        }
 
     return generate
 
@@ -318,7 +530,12 @@ def make_grounding_node(dependencies: GraphDependencies):
         answer = str(state.get("generation", ""))
         documents = list(state.get("reranked_chunks") or state.get("retrieved_chunks", []))
         checker = dependencies.grounding_checker or (
-            lambda value, docs: default_grounding(dependencies.llm, value, docs)
+            lambda value, docs: default_grounding(
+                dependencies.llm,
+                value,
+                docs,
+                max_context_tokens=dependencies.settings.context_max_tokens,
+            )
         )
         is_grounded = checker(answer, documents)
         if is_grounded:
@@ -342,6 +559,8 @@ def make_direct_answer_node(dependencies: GraphDependencies):
         return {
             "generation": answer,
             "citations": [],
+            "sources": [],
+            "citation_warnings": [],
             "grounding_verdict": "pass",
         }
 

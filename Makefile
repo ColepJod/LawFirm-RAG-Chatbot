@@ -1,10 +1,10 @@
 # Local development tasks. `uv` is required.
 # On Windows without GNU Make, run the equivalent `uv run ...` command directly.
 
-.PHONY: install lock config config-dirs test lint check
+.PHONY: install lock config config-dirs ingest serve eval test lint check
 
 install:
-	uv sync --extra dev
+	uv sync --extra dev --extra orchestration --extra ingest --extra retrieval --extra generation --extra api
 
 lock:
 	uv lock
@@ -20,6 +20,9 @@ ingest:
 
 serve:
 	uv run python -m api
+
+eval:
+	uv run python -m evaluation
 
 test:
 	uv run pytest -q

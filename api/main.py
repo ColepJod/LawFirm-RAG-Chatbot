@@ -1,4 +1,4 @@
-"""FastAPI application for the law-firm RAG chatbot."""
+"""FastAPI application for Law Help."""
 
 from __future__ import annotations
 
@@ -69,7 +69,8 @@ def _shutdown_state(state: AppState | None) -> None:
 
 
 app = FastAPI(
-    title="Law Firm RAG Chatbot",
+    title="Law Help",
+    description="Citation-backed answers from a law firm's indexed documents.",
     version="0.1.0",
     lifespan=lifespan,
 )

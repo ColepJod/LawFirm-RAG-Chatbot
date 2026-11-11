@@ -3,9 +3,9 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lawfirm-rag"
+name = "law-help"
 version = "0.1.0"
-description = "Local-first, multi-document RAG chatbot for a law firm, orchestrated with LangGraph."
+description = "Law Help: local-first, multi-document RAG assistant for a law firm, orchestrated with LangGraph."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [

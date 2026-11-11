@@ -1,9 +1,9 @@
-# Law Firm RAG Chatbot
+# Law Help
 
-A production-oriented, local-first Retrieval-Augmented Generation (RAG) assistant
-for a law firm knowledge base. It ingests PDF, Markdown, plain-text, and DOCX
-documents, retrieves evidence with hybrid search, reranks it locally, and returns
-answers with citation-labelled sources.
+Law Help is a production-oriented, local-first Retrieval-Augmented Generation (RAG)
+assistant for a law firm knowledge base. It ingests PDF, Markdown, plain-text, and
+DOCX documents, retrieves evidence with hybrid search, reranks it locally, and
+returns answers with citation-labelled sources.
 
 The project is designed for a **single hardened node**: one FastAPI process, one
 SQLite conversation store, one local Chroma collection, and one local BM25 index.
@@ -513,7 +513,7 @@ and the composer is re-enabled.
 
 ### Conversation identity
 
-- `localStorage["lawfirm.conversationId"]` stores the active conversation UUID.
+- `localStorage["lawhelp.conversationId"]` stores the active conversation UUID.
 - “New chat” generates a fresh UUID and clears the transcript.
 - The server validates IDs and also creates UUIDs when none is supplied.
 - Conversation state is checkpointed by LangGraph under that `thread_id`.

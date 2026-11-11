@@ -72,7 +72,7 @@ class Settings(BaseSettings):
         validate_default=True,
     )
 
-    app_name: str = "Law Firm RAG"
+    app_name: str = "Law Help"
     environment: Literal["local", "staging", "production", "test"] = "local"
     resource_profile: Literal["standard", "cpu"] = "standard"
     project_root: Path = PROJECT_ROOT

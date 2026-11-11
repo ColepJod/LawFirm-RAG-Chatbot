@@ -337,7 +337,8 @@ def test_ui_endpoint_returns_html(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Law Firm RAG Chatbot" in response.text
+    assert "Law Help" in response.text
+    assert "/static/logo.svg" in response.text
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
@@ -347,11 +348,14 @@ def test_static_assets_are_served(tmp_path: Path) -> None:
 
     script = client.get("/static/app.js")
     stylesheet = client.get("/static/styles.css")
+    logo = client.get("/static/logo.svg")
 
     assert script.status_code == 200
     assert "text/javascript" in script.headers["content-type"]
     assert stylesheet.status_code == 200
     assert "text/css" in stylesheet.headers["content-type"]
+    assert logo.status_code == 200
+    assert "image/svg+xml" in logo.headers["content-type"]
     assert "/static/app.js" in client.get("/").text
 
 

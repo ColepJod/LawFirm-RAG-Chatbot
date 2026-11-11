@@ -1,4 +1,4 @@
-# Law Firm RAG Chatbot — Codebase Overview
+# Law Help — Codebase Overview
 
 This document is a detailed, step-by-step summary of the repository so another LLM agent or engineer can understand, navigate, and extend the codebase without re-reading every file.
 

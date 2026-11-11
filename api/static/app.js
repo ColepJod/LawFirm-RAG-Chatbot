@@ -1,6 +1,6 @@
 const STORAGE = {
-  conversation: "lawfirm.conversationId",
-  adminToken: "lawfirm.adminToken",
+  conversation: "lawhelp.conversationId",
+  adminToken: "lawhelp.adminToken",
 };
 
 const NODE_LABELS = {

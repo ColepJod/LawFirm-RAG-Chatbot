@@ -2236,7 +2236,7 @@ wheels = [
 ]
 
 [[package]]
-name = "lawfirm-rag"
+name = "law-help"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

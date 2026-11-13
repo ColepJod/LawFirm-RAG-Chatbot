@@ -21,6 +21,18 @@ from graph.prompts import (
     ROUTE_PROMPT,
 )
 from graph.state import GraphDependencies, RAGState
+from observability.guardrails import is_refusal
+
+EVALUATIVE_PERSON_PATTERN = re.compile(
+    r"\b(attorney|lawyer|counsel|legal team|legal professional)s?\b",
+    re.IGNORECASE,
+)
+EVALUATIVE_QUALITY_PATTERN = re.compile(
+    r"\b(best|top|leading|strongest|most experienced|most qualified|recommended|"
+    r"recommend|top[- ]rated|award[- ]winning|awards?|ranked|ranking|should i hire)\b",
+    re.IGNORECASE,
+)
+ATTORNEY_DIRECTORY_EXPANSION = "attorney directory practice group leaders years in practice"
 
 
 def _invoke_text(llm: Any, prompt: str) -> str:
@@ -83,6 +95,23 @@ def _retrieve(retriever: Any, query: str) -> list[Document]:
     if hasattr(retriever, "get_relevant_documents"):
         return list(retriever.get_relevant_documents(query))
     raise TypeError("retriever must implement invoke or get_relevant_documents")
+
+
+def _expand_retrieval_query(query: str) -> str:
+    """Add directory vocabulary when a question asks for a subjective attorney ranking.
+
+    The corpus contains no rankings or awards. Without this hint, a query such as
+    "best attorneys" can retrieve weakly and produce a mechanical refusal. The
+    expansion only changes retrieval; generation still answers from the retrieved
+    evidence and the prompt forbids inventing a ranking.
+    """
+
+    normalized = (query or "").lower()
+    mentions_person = bool(EVALUATIVE_PERSON_PATTERN.search(normalized))
+    mentions_quality = bool(EVALUATIVE_QUALITY_PATTERN.search(normalized))
+    if mentions_person and mentions_quality:
+        return f"{query} {ATTORNEY_DIRECTORY_EXPANSION}".strip()
+    return query
 
 
 def _rerank(reranker: Any, query: str, documents: list[Document]) -> list[Document]:
@@ -309,7 +338,8 @@ def default_generate(
 ) -> tuple[str, list[str]]:
     if not documents:
         return (
-            "I do not have enough information in the retrieved documents to answer that question.",
+            "I couldn't find that in the indexed documents. Try rephrasing the "
+            "question or asking about the firm's attorneys, rates, offices, or policies.",
             [],
         )
     selected = _select_context(documents, max_context_tokens)
@@ -330,7 +360,7 @@ def default_grounding(
 ) -> bool:
     if not documents:
         return True
-    if "do not have enough information" in answer.lower():
+    if is_refusal(answer):
         return True
     selected = _select_context(documents, max_context_tokens)
     context = "\n\n".join(
@@ -394,7 +424,7 @@ def make_retrieve_node(dependencies: GraphDependencies):
         query = (
             state.get("standalone_query") or state.get("original_query") or _current_query(state)
         )
-        documents = _retrieve(dependencies.retriever, query)
+        documents = _retrieve(dependencies.retriever, _expand_retrieval_query(query))
         return {
             "retrieved_chunks": list(documents),
             "retrieved_source_ids": [_source_id(document) for document in documents],
@@ -518,6 +548,16 @@ def make_generate_node(dependencies: GraphDependencies):
             )
         else:
             answer, citations = generator(query, selected)
+
+        if is_refusal(answer):
+            # A pure refusal has no supporting answer to cite. Do not attach
+            # unrelated retrieved sources or a citation warning.
+            return {
+                "generation": answer,
+                "citations": [],
+                "sources": [],
+                "citation_warnings": [],
+            }
 
         cited_indices = _extract_citation_indices(answer, len(selected))
         if cited_indices:

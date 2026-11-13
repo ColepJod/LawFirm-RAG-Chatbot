@@ -914,7 +914,16 @@ Key behaviors:
 - **Corrective retrieval.** Empty retrieval triggers up to `MAX_QUERY_REWRITES`
   rewrites before a refusal.
 - **Grounded generation.** The prompt includes numbered context blocks and
-  instructs the model to cite every factual statement.
+  instructs the model to cite every factual statement. When the exact answer is
+  absent, it answers the closest supported question instead of saying “no such
+  word” or “not in the provided context.”
+- **Subjective questions.** Ranking questions such as “best attorneys” do not
+  trigger a fabricated ranking. The assistant states that the documents do not
+  rank attorneys, then offers factual differentiators such as practice
+  leadership, years in practice, office, and representative matters. Subjective
+  attorney queries are expanded to directory vocabulary before retrieval.
+- **Pure refusals hide sources.** A refusal that answers nothing has no
+  supporting citations, so unrelated retrieved chunks are not shown as sources.
 - **Grounding retry.** A judge checks the answer; a failed check retries
   generation up to `MAX_GROUNDING_RETRIES`.
 - **Citation parsing.** Bracketed labels are parsed defensively; only labels

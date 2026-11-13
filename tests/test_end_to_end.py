@@ -99,7 +99,7 @@ def test_end_to_end_graph_refuses_without_context() -> None:
         config={"configurable": {"thread_id": "e2e"}, "recursion_limit": 20},
     )
 
-    assert "do not have enough information" in result["generation"].lower()
+    assert "couldn't find that in the indexed documents" in result["generation"].lower()
     assert result["grounding_verdict"] == "pass"
 
 

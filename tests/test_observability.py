@@ -13,6 +13,7 @@ from observability import (
     detect_prompt_injection,
     health_check,
 )
+from observability.guardrails import is_refusal
 
 
 def make_settings(tmp_path: Path) -> Settings:
@@ -79,6 +80,19 @@ def test_output_guardrail_accepts_numbered_citation_answer(tmp_path: Path) -> No
     result = OutputGuardrails(settings).validate_citations(answer, [doc])
 
     assert result.allowed is True
+
+
+def test_output_guardrail_accepts_single_numbered_citation(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    doc = type("Doc", (), {"metadata": {"source_file": "rag_chatbot.txt"}})()
+    result = OutputGuardrails(settings).validate_citations("The rate is $300 [1].", [doc])
+
+    assert result.allowed is True
+
+
+def test_refusal_detection_distinguishes_mixed_answers() -> None:
+    assert is_refusal("I couldn't find that in the indexed documents.") is True
+    assert is_refusal("I couldn't find the exact policy, but employment law applies [1].") is False
 
 
 def test_output_guardrail_accepts_refusal_without_context(tmp_path: Path) -> None:

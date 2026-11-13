@@ -15,7 +15,8 @@ class GuardrailResult:
     reasons: list[str]
 
 
-CITATION_PATTERN = re.compile(r"\[\s*\d+\s*,", re.IGNORECASE)
+CITATION_PATTERN = re.compile(r"\[\s*\d+(?:\s*[,\]])", re.IGNORECASE)
+CITATION_PRESENT_PATTERN = re.compile(r"\[\s*\d+")
 
 PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
@@ -85,17 +86,32 @@ def detect_pii(text: str) -> list[str]:
 
 REFUSAL_MARKERS = (
     "do not have enough information",
+    "don't have enough information",
+    "not enough information",
     "cannot answer",
+    "can't answer",
+    "unable to answer",
     "insufficient",
     "no information",
-    "not have enough",
+    "no such word",
+    "not mentioned in the indexed documents",
+    "not in the indexed documents",
+    "couldn't find",
+    "could not find",
 )
 
 
 def is_refusal(answer: str) -> bool:
-    """Return True when the answer is a refusal rather than a grounded answer."""
+    """Return True when the answer is a pure refusal rather than a grounded answer.
+
+    A mixed answer that refuses part of a question but then answers a related
+    part with citations is not a pure refusal, so it should still be validated
+    as a grounded answer.
+    """
 
     normalized = (answer or "").lower()
+    if CITATION_PRESENT_PATTERN.search(normalized):
+        return False
     return any(marker in normalized for marker in REFUSAL_MARKERS)
 
 

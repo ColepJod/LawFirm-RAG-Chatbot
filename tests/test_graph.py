@@ -53,7 +53,12 @@ def make_settings(**overrides: object) -> Settings:
 
 
 def invoke_graph(
-    settings: Settings, llm: FakeLLM, retriever: FakeRetriever, **deps_overrides
+    settings: Settings,
+    llm: FakeLLM,
+    retriever: FakeRetriever,
+    *,
+    query: str = "test query",
+    **deps_overrides,
 ) -> dict:
     deps = GraphDependencies(
         settings=settings,
@@ -64,7 +69,7 @@ def invoke_graph(
     )
     graph = build_graph(deps)
     config = {"configurable": {"thread_id": "test-thread"}, "recursion_limit": 30}
-    return graph.invoke({"messages": [HumanMessage("test query")]}, config=config)
+    return graph.invoke({"messages": [HumanMessage(query)]}, config=config)
 
 
 def test_route_sends_chit_chat_to_direct_answer() -> None:
@@ -163,7 +168,71 @@ def test_empty_retrieval_refuses_without_rewrite_when_disabled() -> None:
     result = invoke_graph(settings, llm, retriever)
 
     assert result["retrieved_chunks"] == []
-    assert "do not have enough information" in result["generation"].lower()
+    assert "couldn't find that in the indexed documents" in result["generation"].lower()
+    assert result["sources"] == []
+    assert result["grounding_verdict"] == "pass"
+
+
+def test_subjective_attorney_question_expands_retrieval_terms() -> None:
+    settings = make_settings()
+    doc = Document(
+        page_content=(
+            "Elena M. Vasquez is a partner with twenty years of experience and leads "
+            "the Corporate Law and Mergers and Acquisitions practice."
+        ),
+        metadata={
+            "source_file": "directory.md",
+            "section_heading": "3.3 Elena M. Vasquez",
+            "page_number": 1,
+        },
+    )
+    # "attorney" triggers the deterministic rag route, so only generation and
+    # grounding consume LLM responses.
+    llm = FakeLLM(
+        [
+            (
+                "The firm's documents don't rank attorneys as \"best.\" They do identify "
+                "practice-group leaders and their years of experience [1]."
+            ),
+            "yes",
+        ]
+    )
+    retriever = FakeRetriever([[doc]])
+
+    result = invoke_graph(
+        settings,
+        llm,
+        retriever,
+        query="Which are the firm's best attorneys?",
+    )
+
+    assert retriever.queries == [
+        "Which are the firm's best attorneys? attorney directory practice group leaders "
+        "years in practice"
+    ]
+    assert "don't rank attorneys" in result["generation"]
+    assert result["sources"]
+    assert result["grounding_verdict"] == "pass"
+
+
+def test_pure_refusal_hides_unrelated_sources() -> None:
+    settings = make_settings()
+    doc = Document(
+        page_content="Employment counseling and office locations are described here.",
+        metadata={"source_file": "policy.md", "section_heading": "Employment", "page_number": 1},
+    )
+    llm = FakeLLM(
+        [
+            "I couldn't find a remote-work policy in the indexed documents.",
+        ]
+    )
+    retriever = FakeRetriever([[doc]])
+
+    result = invoke_graph(settings, llm, retriever, query="What is the remote work policy?")
+
+    assert result["sources"] == []
+    assert result["citations"] == []
+    assert result["citation_warnings"] == []
     assert result["grounding_verdict"] == "pass"
 
 

@@ -1,13 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">Law Help</title>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4cc2ff"/>
-      <stop offset="1" stop-color="#0ea5e9"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <g fill="none" stroke="#062133" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="64" height="64" rx="16" fill="#fafafa"/>
+  <g fill="none" stroke="#0a0a0a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M32 14v35"/>
     <path d="M20 49h24"/>
     <path d="M18 22h28"/>
@@ -18,5 +12,5 @@
     <path d="M46 22l7 14"/>
     <path d="M39 36a7 5 0 0 0 14 0"/>
   </g>
-  <circle cx="32" cy="14" r="3.2" fill="#062133"/>
+  <circle cx="32" cy="14" r="3.2" fill="#0a0a0a"/>
 </svg>

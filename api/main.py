@@ -94,6 +94,9 @@ async def security_and_logging_middleware(request: Request, call_next):
     response = await call_next(request)
     for header, value in SECURITY_HEADERS.items():
         response.headers.setdefault(header, value)
+    if request.url.path.startswith("/static/"):
+        # Assets are not fingerprinted, so make browsers revalidate them.
+        response.headers.setdefault("Cache-Control", "no-cache")
     duration_ms = (time.perf_counter() - started) * 1000
     logger.info(
         "%s %s -> %s %.1fms",

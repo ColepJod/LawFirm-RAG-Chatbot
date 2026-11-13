@@ -18,14 +18,14 @@ const NODE_LABELS = {
 
 const el = {
   messages: document.getElementById("messages"),
+  chatScroll: document.getElementById("chatScroll"),
   emptyState: document.getElementById("emptyState"),
   composer: document.getElementById("composer"),
   query: document.getElementById("query"),
   send: document.getElementById("send"),
   newChat: document.getElementById("newChat"),
+  newChatMobile: document.getElementById("newChatMobile"),
   health: document.getElementById("health"),
-  sources: document.getElementById("sources"),
-  sourceCount: document.getElementById("sourceCount"),
   documents: document.getElementById("documents"),
   refreshDocs: document.getElementById("refreshDocs"),
   adminToken: document.getElementById("adminToken"),
@@ -34,6 +34,10 @@ const el = {
   directoryForm: document.getElementById("directoryForm"),
   directoryPath: document.getElementById("directoryPath"),
   jobStatus: document.getElementById("jobStatus"),
+  sidebar: document.getElementById("sidebar"),
+  sidebarToggle: document.getElementById("sidebarToggle"),
+  sidebarClose: document.getElementById("sidebarClose"),
+  overlay: document.getElementById("overlay"),
 };
 
 let conversationId = localStorage.getItem(STORAGE.conversation);
@@ -64,18 +68,27 @@ function setJobStatus(text, kind = "") {
 }
 
 function scrollToBottom() {
-  el.messages.scrollTop = el.messages.scrollHeight;
+  el.chatScroll.scrollTop = el.chatScroll.scrollHeight;
 }
 
 function hideEmptyState() {
   el.emptyState.hidden = true;
 }
 
+function messageBody(node) {
+  return node.querySelector(".message-body");
+}
+
 function addMessage(text, role, { pending = false, error = false } = {}) {
   hideEmptyState();
   const node = document.createElement("div");
   node.className = `message ${role}${pending ? " pending" : ""}${error ? " error" : ""}`;
-  node.textContent = text;
+
+  const body = document.createElement("div");
+  body.className = "message-body";
+  body.textContent = text;
+  node.appendChild(body);
+
   el.messages.appendChild(node);
   scrollToBottom();
   return node;
@@ -85,12 +98,37 @@ function addMeta(messageNode, payload) {
   const meta = document.createElement("div");
   meta.className = "message-meta";
   const parts = [];
-  if (payload.grounding_verdict) parts.push(`grounding: ${payload.grounding_verdict}`);
+  if (payload.grounding_verdict) {
+    parts.push(payload.grounding_verdict === "pass" ? "Grounded" : `Grounding: ${payload.grounding_verdict}`);
+  }
   if (typeof payload.latency_ms === "number") parts.push(`${Math.round(payload.latency_ms)} ms`);
-  if (payload.thread_id) parts.push(`conversation ${payload.thread_id.slice(0, 8)}`);
-  if (!parts.length) return;
-  meta.textContent = parts.join(" · ");
-  messageNode.appendChild(meta);
+  if (payload.thread_id) parts.push(`Conversation ${payload.thread_id.slice(0, 8)}`);
+  if (parts.length) {
+    const text = document.createElement("span");
+    text.textContent = parts.join(" · ");
+    meta.appendChild(text);
+  }
+
+  if (payload.answer) {
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "text-button";
+    copy.textContent = "Copy answer";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(payload.answer);
+        copy.textContent = "Copied";
+        setTimeout(() => {
+          copy.textContent = "Copy answer";
+        }, 1600);
+      } catch {
+        copy.textContent = "Copy failed";
+      }
+    });
+    meta.appendChild(copy);
+  }
+
+  if (meta.childElementCount) messageNode.appendChild(meta);
 }
 
 function addWarnings(messageNode, warnings) {
@@ -104,33 +142,45 @@ function addWarnings(messageNode, warnings) {
 function relevancePercent(score) {
   // Cross-encoder scores are raw logits; map them to 0-100 for display.
   const probability = 1 / (1 + Math.exp(-score));
-  return `${Math.round(probability * 100)}%`;
+  return `${Math.round(probability * 100)}% match`;
 }
 
-function renderSources(sources) {
-  el.sources.replaceChildren();
-  el.sourceCount.textContent = String(sources ? sources.length : 0);
-  if (!sources || !sources.length) {
-    const empty = document.createElement("p");
-    empty.className = "muted";
-    empty.textContent = "No sources were returned for this answer.";
-    el.sources.appendChild(empty);
-    return;
-  }
+function renderSources(messageNode, sources) {
+  if (!sources || !sources.length) return;
+
+  const details = document.createElement("details");
+  details.className = "sources-block";
+
+  const summary = document.createElement("summary");
+  summary.appendChild(document.createTextNode("Sources"));
+  const count = document.createElement("span");
+  count.className = "source-count";
+  count.textContent = String(sources.length);
+  summary.appendChild(count);
+  details.appendChild(summary);
+
+  const list = document.createElement("div");
+  list.className = "source-list";
 
   for (const source of sources) {
     const item = document.createElement("article");
     item.className = "source-item";
 
     const header = document.createElement("header");
+    const index = document.createElement("span");
+    index.className = "source-index";
+    index.textContent = String(source.id);
+    header.appendChild(index);
+
     const title = document.createElement("span");
     title.className = "source-title";
-    title.textContent = `[${source.id}] ${source.source_file}`;
+    title.textContent = source.source_file;
     header.appendChild(title);
+
     if (typeof source.score === "number") {
       const score = document.createElement("span");
-      score.className = "pill pill-muted";
-      score.textContent = `${relevancePercent(source.score)} match`;
+      score.className = "source-score";
+      score.textContent = relevancePercent(source.score);
       score.title = `Cross-encoder score: ${source.score.toFixed(2)}`;
       header.appendChild(score);
     }
@@ -148,8 +198,11 @@ function renderSources(sources) {
       snippet.textContent = source.snippet;
       item.appendChild(snippet);
     }
-    el.sources.appendChild(item);
+    list.appendChild(item);
   }
+
+  details.appendChild(list);
+  messageNode.appendChild(details);
 }
 
 function parseEventBlock(block) {
@@ -205,6 +258,7 @@ async function sendQuery(query) {
   resizeComposer();
 
   const pendingNode = addMessage("Routing question…", "assistant", { pending: true });
+  const pendingBody = messageBody(pendingNode);
 
   try {
     const response = await fetch("/chat/stream", {
@@ -238,7 +292,7 @@ async function sendQuery(query) {
 
         const { event, data } = parseEventBlock(block);
         if (event === "progress" && data) {
-          pendingNode.textContent = `${NODE_LABELS[data.node] || "Working"}…`;
+          pendingBody.textContent = `${NODE_LABELS[data.node] || "Working"}…`;
         } else if (event === "done" && data) {
           finished = data;
         } else if (event === "error") {
@@ -251,10 +305,10 @@ async function sendQuery(query) {
     if (!finished) throw new Error("The server did not return an answer.");
 
     pendingNode.classList.remove("pending");
-    pendingNode.textContent = finished.answer || "No answer returned.";
+    pendingBody.textContent = finished.answer || "No answer returned.";
     addWarnings(pendingNode, finished.warnings);
+    renderSources(pendingNode, finished.sources);
     addMeta(pendingNode, finished);
-    renderSources(finished.sources);
   } catch (error) {
     pendingNode.remove();
     addMessage(`Error: ${error.message}`, "assistant", { error: true });
@@ -306,6 +360,7 @@ async function refreshDocuments() {
       const name = document.createElement("span");
       name.className = "document-name";
       name.textContent = documentInfo.source_file;
+      name.title = documentInfo.source_file;
       header.appendChild(name);
 
       const button = document.createElement("button");
@@ -339,19 +394,9 @@ async function deleteDocument(sourceFile) {
     setJobStatus(`Deleted ${sourceFile}.`, "ok");
     await refreshDocuments();
     await refreshHealth();
-    setSourcesNotice("Sources refreshed. Ask a question again.");
   } catch (error) {
     setJobStatus(`Delete failed: ${error.message}`, "bad");
   }
-}
-
-function setSourcesNotice(text) {
-  el.sources.replaceChildren();
-  el.sourceCount.textContent = "0";
-  const empty = document.createElement("p");
-  empty.className = "muted";
-  empty.textContent = text;
-  el.sources.appendChild(empty);
 }
 
 async function pollJob(jobId) {
@@ -397,7 +442,26 @@ async function submitIngestion(formData) {
 
 function resizeComposer() {
   el.query.style.height = "auto";
-  el.query.style.height = `${Math.min(el.query.scrollHeight, 160)}px`;
+  el.query.style.height = `${Math.min(el.query.scrollHeight, 200)}px`;
+}
+
+function openSidebar() {
+  document.body.classList.add("sidebar-open");
+  el.overlay.hidden = false;
+}
+
+function closeSidebar() {
+  document.body.classList.remove("sidebar-open");
+  el.overlay.hidden = true;
+}
+
+function startNewChat() {
+  conversationId = newConversationId();
+  localStorage.setItem(STORAGE.conversation, conversationId);
+  el.messages.replaceChildren(el.emptyState);
+  el.emptyState.hidden = false;
+  closeSidebar();
+  el.query.focus();
 }
 
 el.composer.addEventListener("submit", (event) => {
@@ -413,13 +477,15 @@ el.query.addEventListener("keydown", (event) => {
   }
 });
 
-el.newChat.addEventListener("click", () => {
-  conversationId = newConversationId();
-  localStorage.setItem(STORAGE.conversation, conversationId);
-  el.messages.replaceChildren(el.emptyState);
-  el.emptyState.hidden = false;
-  setSourcesNotice("Ask a question to see the documents used for the answer.");
-  el.query.focus();
+el.newChat.addEventListener("click", startNewChat);
+el.newChatMobile.addEventListener("click", startNewChat);
+
+el.sidebarToggle.addEventListener("click", openSidebar);
+el.sidebarClose.addEventListener("click", closeSidebar);
+el.overlay.addEventListener("click", closeSidebar);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSidebar();
 });
 
 for (const button of document.querySelectorAll(".suggestion")) {
@@ -465,5 +531,4 @@ el.directoryForm.addEventListener("submit", (event) => {
 
 refreshHealth();
 refreshDocuments();
-setSourcesNotice("Ask a question to see the documents used for the answer.");
 el.query.focus();

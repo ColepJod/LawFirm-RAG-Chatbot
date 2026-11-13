@@ -4,71 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0a0a" />
   <meta name="description" content="Law Help turns your firm's documents into citation-backed answers." />
   <title>Law Help | Firm Knowledge Assistant</title>
-  <link rel="icon" type="image/svg+xml" href="/static/logo.svg" />
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=3" />
+  <link rel="stylesheet" href="/static/styles.css?v=3" />
 </head>
 <body>
   <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">
-        <img class="brand-logo" src="/static/logo.svg" alt="" aria-hidden="true" />
-        <div>
-          <h1>Law Help</h1>
-          <p class="brand-sub">Grounded answers from your firm's documents</p>
-        </div>
+    <aside class="sidebar" id="sidebar" aria-label="Workspace">
+      <div class="sidebar-top">
+        <a class="brand" href="/" aria-label="Law Help home">
+          <img class="brand-logo" src="/static/logo.svg?v=3" width="30" height="30" alt="" aria-hidden="true" />
+          <span class="brand-name">Law Help</span>
+        </a>
+        <button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Close menu">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
-      <div class="topbar-actions">
-        <span id="health" class="pill pill-muted" role="status">Checking…</span>
-        <button id="newChat" class="button button-ghost" type="button">New chat</button>
-      </div>
-    </header>
 
-    <main class="workspace">
-      <section class="chat-panel" aria-label="Chat">
-        <div id="messages" class="messages" aria-live="polite">
-          <div id="emptyState" class="empty-state">
-            <h2>Ask about firm policy, rates, offices, or practice areas</h2>
-            <p>Answers are grounded in your indexed corpus and include source references.</p>
-            <div class="suggestions">
-              <button class="suggestion" type="button" data-question="What are the firm's consultation fees?">Consultation fees</button>
-              <button class="suggestion" type="button" data-question="Which offices does the firm operate?">Office locations</button>
-              <button class="suggestion" type="button" data-question="What practice areas does the firm offer?">Practice areas</button>
-            </div>
-          </div>
-        </div>
-        <form id="composer" class="composer">
-          <label class="sr-only" for="query">Ask a question</label>
-          <textarea id="query" rows="1" placeholder="Ask a question… (Enter to send, Shift+Enter for a new line)" autocomplete="off"></textarea>
-          <button id="send" class="button button-primary" type="submit">Send</button>
-        </form>
-        <p class="disclaimer">Answers can be incomplete. Verify important legal information against the cited documents.</p>
-      </section>
+      <button id="newChat" class="new-chat" type="button">
+        <span class="new-chat-icon" aria-hidden="true">+</span>
+        New chat
+      </button>
 
-      <aside class="side-panel" aria-label="Sources and knowledge base">
-        <section class="card">
-          <div class="card-head">
-            <h2>Sources</h2>
-            <span id="sourceCount" class="pill pill-muted">0</span>
-          </div>
-          <div id="sources" class="sources">
-            <p class="muted">Ask a question to see the documents used for the answer.</p>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Knowledge base</h2>
-            <button id="refreshDocs" class="button button-tiny" type="button">Refresh</button>
+      <div class="sidebar-scroll">
+        <section class="sidebar-panel" aria-labelledby="kbHeading">
+          <div class="panel-head">
+            <h2 id="kbHeading">Knowledge base</h2>
+            <button id="refreshDocs" class="text-button" type="button">Refresh</button>
           </div>
           <div id="documents" class="documents">
-            <p class="muted">No indexed documents loaded.</p>
+            <p class="muted">Loading documents…</p>
           </div>
         </section>
 
-        <details class="card admin-card">
-          <summary>Admin &amp; ingestion</summary>
+        <details class="sidebar-panel admin-card">
+          <summary class="panel-head">
+            <h2>Admin &amp; ingestion</h2>
+            <span class="chevron" aria-hidden="true">&#8964;</span>
+          </summary>
           <div class="admin-body">
             <label class="field">
               <span>Admin token</span>
@@ -91,10 +66,68 @@
             <div id="jobStatus" class="job-status" role="status"></div>
           </div>
         </details>
-      </aside>
+      </div>
+
+      <div class="sidebar-foot">
+        <span id="health" class="pill pill-muted" role="status">Checking…</span>
+        <span class="foot-note">Internal use only</span>
+      </div>
+    </aside>
+
+    <div id="overlay" class="overlay" hidden></div>
+
+    <main class="main">
+      <header class="mobile-head">
+        <button id="sidebarToggle" class="icon-button" type="button" aria-label="Open menu">
+          <span aria-hidden="true">&#9776;</span>
+        </button>
+        <span class="mobile-brand">Law Help</span>
+        <button id="newChatMobile" class="icon-button" type="button" aria-label="New chat">
+          <span aria-hidden="true">+</span>
+        </button>
+      </header>
+
+      <div class="chat-scroll" id="chatScroll">
+        <div id="messages" class="messages" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <img class="empty-logo" src="/static/logo.svg?v=3" width="56" height="56" alt="" aria-hidden="true" />
+            <h1>How can I help?</h1>
+            <p>Ask about firm policy, rates, offices, or practice areas. Every answer is grounded in your documents with cited sources.</p>
+            <div class="suggestions">
+              <button class="suggestion" type="button" data-question="What are the firm's consultation fees?">
+                <span>Consultation fees</span>
+                <span class="suggestion-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+              <button class="suggestion" type="button" data-question="Which offices does the firm operate?">
+                <span>Office locations</span>
+                <span class="suggestion-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+              <button class="suggestion" type="button" data-question="What practice areas does the firm offer?">
+                <span>Practice areas</span>
+                <span class="suggestion-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+              <button class="suggestion" type="button" data-question="Who leads the Intellectual Property practice?">
+                <span>IP practice lead</span>
+                <span class="suggestion-arrow" aria-hidden="true">&rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-shell">
+        <form id="composer" class="composer">
+          <label class="sr-only" for="query">Ask a question</label>
+          <textarea id="query" rows="1" placeholder="Ask about your firm's documents…" autocomplete="off"></textarea>
+          <button id="send" class="send-button" type="submit" aria-label="Send message">
+            <span aria-hidden="true">&uarr;</span>
+          </button>
+        </form>
+        <p class="disclaimer">Law Help can make mistakes. Verify important information against the cited documents.</p>
+      </div>
     </main>
   </div>
 
-  <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/app.js?v=3"></script>
 </body>
 </html>
